@@ -7,8 +7,6 @@
 #ifndef RETDEC_FILEFORMAT_FILE_FORMAT_PE_PE_FORMAT_H
 #define RETDEC_FILEFORMAT_FILE_FORMAT_PE_PE_FORMAT_H
 
-#include <pelib/PeLib.h>
-
 #include "retdec/crypto/hash_context.h"
 #include "retdec/fileformat/file_format/file_format.h"
 #include "retdec/fileformat/file_format/pe/pe_format_parser/pe_format_parser.h"
@@ -18,6 +16,11 @@
 #include "retdec/fileformat/types/dotnet_headers/string_stream.h"
 #include "retdec/fileformat/types/dotnet_headers/user_string_stream.h"
 #include "retdec/fileformat/types/dotnet_types/dotnet_class.h"
+#include "retdec/fileformat/types/visual_basic/visual_basic_info.h"
+#include "retdec/pelib/PeLib.h"
+
+// Forward declare OpenSSL structures used in this header.
+typedef struct pkcs7_st PKCS7;
 
 namespace retdec {
 namespace fileformat {
@@ -41,11 +44,20 @@ class PeFormat : public FileFormat
 		std::string typeLibId;                                     ///< .NET type lib ID
 		std::vector<std::shared_ptr<DotnetClass>> definedClasses;  ///< .NET defined class list
 		std::vector<std::shared_ptr<DotnetClass>> importedClasses; ///< .NET imported class list
+		std::string typeRefHashCrc32;                              ///< .NET typeref table hash as CRC32
+		std::string typeRefHashMd5;                                ///< .NET typeref table hash as MD5
+		std::string typeRefHashSha256;                             ///< .NET typeref table hash as SHA256
+		VisualBasicInfo visualBasicInfo;                           ///< visual basic header information
+
+		static const std::unordered_set<std::string> defDllList;   ///< Default set of DLLs for checking dependency missing
+		std::unordered_set<std::string> dllList;                   ///< Override set of DLLs for checking dependency missing
+		bool errorLoadingDllList;                                  ///< If true, then an error happened while loading DLL list
 
 		/// @name Initialization methods
 		/// @{
+		void initLoaderErrorInfo(PeLib::LoaderError ldrError);
 		void initLoaderErrorInfo();
-		void initStructures();
+		void initStructures(const std::string & dllListFile);
 		/// @}
 
 		/// @name Virtual initialization methods
@@ -62,10 +74,12 @@ class PeFormat : public FileFormat
 		void loadSymbols();
 		void loadImports();
 		void loadExports();
+		void loadVisualBasicHeader();
 		void loadPdbInfo();
 		void loadResourceNodes(std::vector<const PeLib::ResourceChild*> &nodes, const std::vector<std::size_t> &levels);
 		void loadResources();
 		void loadCertificates();
+		void loadTlsInformation();
 		/// @}
 
 		/// @name Signature verification methods
@@ -88,6 +102,25 @@ class PeFormat : public FileFormat
 		void detectTypeLibId();
 		void detectDotnetTypes();
 		std::uint64_t detectPossibleMetadataHeaderAddress() const;
+		void computeTypeRefHashes();
+		/// @}
+		/// @name Visual Basic methods
+		/// @{
+		bool parseVisualBasicProjectInfo(std::size_t structureOffset);
+		bool parseVisualBasicExternTable(std::size_t structureOffset, std::size_t nEntries);
+		bool parseVisualBasicObjectTable(std::size_t structureOffset);
+		bool parseVisualBasicObjects(std::size_t structureOffset, std::size_t nObjects);
+		bool parseVisualBasicComRegistrationData(std::size_t structureOffset);
+		bool parseVisualBasicComRegistrationInfo(std::size_t structureOffset,
+												std::size_t comRegDataOffset);
+		/// @}
+		/// @name Auxiliary scanning methods
+		/// @{
+		void scanForSectionAnomalies();
+		void scanForResourceAnomalies();
+		void scanForImportAnomalies();
+		void scanForExportAnomalies();
+		void scanForOptHeaderAnomalies();
 		/// @}
 	protected:
 		PeLib::PeFile *file;              ///< PeLib representation of PE file
@@ -95,7 +128,9 @@ class PeFormat : public FileFormat
 		PeLib::PeHeaderT<64> *peHeader64; ///< header of 64-bit PE file
 		int peClass;                      ///< class of PE file
 	public:
-		PeFormat(std::string pathToFile, LoadFlags loadFlags = LoadFlags::NONE);
+		PeFormat(const std::string & pathToFile, const std::string & dllListFile, LoadFlags loadFlags = LoadFlags::NONE);
+		PeFormat(std::istream &inputStream, LoadFlags loadFlags = LoadFlags::NONE);
+		PeFormat(const std::uint8_t *data, std::size_t size, LoadFlags loadFlags = LoadFlags::NONE);
 		virtual ~PeFormat() override;
 
 		/// @name Byte value storage methods
@@ -128,6 +163,7 @@ class PeFormat : public FileFormat
 
 		/// @name Detection methods
 		/// @{
+		const PeLib::MzHeader & getMzHeader() const;
 		std::size_t getMzHeaderSize() const;
 		std::size_t getOptionalHeaderSize() const;
 		std::size_t getPeHeaderOffset() const;
@@ -141,6 +177,7 @@ class PeFormat : public FileFormat
 		std::size_t getChecksum() const;
 		std::size_t getFileAlignment() const;
 		std::size_t getSectionAlignment() const;
+		std::size_t getSizeOfHeaders() const;
 		std::size_t getSizeOfImage() const;
 		std::size_t getSizeOfStackReserve() const;
 		std::size_t getSizeOfStackCommit() const;
@@ -148,6 +185,12 @@ class PeFormat : public FileFormat
 		std::size_t getSizeOfHeapCommit() const;
 		std::size_t getNumberOfDataDirectories() const;
 		std::size_t getDeclaredNumberOfDataDirectories() const;
+
+		/// @name Dependency checking
+		/// @{
+		bool isMissingDependency(std::string dllname) const;
+		bool dllListFailedToLoad() const;
+		bool initDllList(const std::string & dllListFile);
 
 		int getPeClass() const;
 		bool isDotNet() const;
@@ -171,6 +214,15 @@ class PeFormat : public FileFormat
 		const std::string& getTypeLibId() const;
 		const std::vector<std::shared_ptr<DotnetClass>>& getDefinedDotnetClasses() const;
 		const std::vector<std::shared_ptr<DotnetClass>>& getImportedDotnetClasses() const;
+		const std::string& getTypeRefhashCrc32() const;
+		const std::string& getTypeRefhashMd5() const;
+		const std::string& getTypeRefhashSha256() const;
+		const VisualBasicInfo* getVisualBasicInfo() const;
+		/// @}
+
+		/// @name Scanning methods
+		/// @{
+		void scanForAnomalies();
 		/// @}
 };
 

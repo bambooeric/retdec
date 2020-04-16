@@ -57,11 +57,6 @@ LLVMIntrinsicConverter::LLVMIntrinsicConverter(ShPtr<Module> module):
 	OrderedAllVisitor(), module(module), renamedFuncNames() {}
 
 /**
-* @brief Destructs the converter.
-*/
-LLVMIntrinsicConverter::~LLVMIntrinsicConverter() {}
-
-/**
 * @brief Converts LLVM intrinsic functions in @a module into standard-C-library
 *        functions.
 *
@@ -173,6 +168,10 @@ void LLVMIntrinsicConverter::convertIntrinsicFuncName(ShPtr<Function> func) {
 	// llvm.trap
 	else if (startsWith(funcName, "llvm.trap")) {
 		renameIntrinsicFunc(func, "abort");
+	}
+	// llvm.copysign
+	else if (startsWith(funcName, "llvm.copysign")) {
+		renameFloatIntrinsicFunc(func, "copysign");
 	}
 }
 

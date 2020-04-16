@@ -9,6 +9,7 @@
 
 #include <string>
 
+namespace retdec {
 namespace fileinfo {
 
 /**
@@ -22,12 +23,9 @@ class PdbInfo
 		std::string type;      ///< type of PDB file
 		std::string path;      ///< original path to PDB debug file
 		std::string guid;      ///< GUID of PDB file
-		std::size_t age;       ///< age of PDB file
-		std::size_t timeStamp; ///< time and date that PDB file was created
+		std::size_t age = std::numeric_limits<std::size_t>::max();       ///< age of PDB file
+		std::size_t timeStamp = std::numeric_limits<std::size_t>::max(); ///< time and date that PDB file was created
 	public:
-		PdbInfo();
-		~PdbInfo();
-
 		/// @name Getters
 		/// @{
 		std::string getType() const;
@@ -48,5 +46,6 @@ class PdbInfo
 };
 
 } // namespace fileinfo
+} // namespace retdec
 
 #endif

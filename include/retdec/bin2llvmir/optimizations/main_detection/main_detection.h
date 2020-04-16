@@ -12,9 +12,10 @@
 #include <llvm/IR/Module.h>
 #include <llvm/Pass.h>
 
-#include "retdec/utils/address.h"
+#include "retdec/common/address.h"
 #include "retdec/bin2llvmir/providers/config.h"
 #include "retdec/bin2llvmir/providers/fileimage.h"
+#include "retdec/bin2llvmir/providers/names.h"
 
 namespace retdec {
 namespace bin2llvmir {
@@ -28,23 +29,26 @@ class MainDetection : public llvm::ModulePass
 		bool runOnModuleCustom(
 				llvm::Module& m,
 				Config* c,
-				FileImage* img = nullptr);
+				FileImage* img = nullptr,
+				NameContainer* names = nullptr);
 
 	private:
 		bool run();
 		bool skipAnalysis();
-		retdec::utils::Address getFromFunctionNames();
-		retdec::utils::Address getFromContext();
-		retdec::utils::Address getFromEntryPointOffset(int offset);
-		retdec::utils::Address getFromCrtSetCheckCount();
-		retdec::utils::Address getFromInterlockedExchange();
+		void removeStaticallyLinked();
+		retdec::common::Address getFromFunctionNames();
+		retdec::common::Address getFromContext();
+		retdec::common::Address getFromEntryPointOffset(int offset);
+		retdec::common::Address getFromCrtSetCheckCount();
+		retdec::common::Address getFromInterlockedExchange();
 
-		bool applyResult(retdec::utils::Address mainAddr);
+		bool applyResult(retdec::common::Address mainAddr);
 
 	private:
 		llvm::Module* _module = nullptr;
 		Config* _config = nullptr;
 		FileImage* _image = nullptr;
+		NameContainer* _names = nullptr;
 };
 
 } // namespace bin2llvmir

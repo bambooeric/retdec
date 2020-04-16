@@ -23,10 +23,6 @@ Segment::Segment(const Segment& segment) : _secSeg(segment._secSeg), _address(se
 {
 }
 
-Segment::~Segment()
-{
-}
-
 /**
  * Returns associated section or segment, which was used for loading of this segment.
  *
@@ -54,7 +50,7 @@ std::uint64_t Segment::getAddress() const
  */
 std::uint64_t Segment::getEndAddress() const
 {
-	return getSize() ? getAddress() + getSize() - 1 : getAddress();
+	return getSize() ? getAddress() + getSize() : getAddress() + 1;
 }
 
 /**
@@ -64,7 +60,7 @@ std::uint64_t Segment::getEndAddress() const
  */
 std::uint64_t Segment::getPhysicalEndAddress() const
 {
-	return getPhysicalSize() ? getAddress() + getPhysicalSize() - 1 : getAddress();
+	return getPhysicalSize() ? getAddress() + getPhysicalSize() : getAddress() + 1;
 }
 
 /**
@@ -93,9 +89,9 @@ std::uint64_t Segment::getPhysicalSize() const
  *
  * @return Address range.
  */
-retdec::utils::Range<std::uint64_t> Segment::getAddressRange() const
+retdec::common::Range<std::uint64_t> Segment::getAddressRange() const
 {
-	return retdec::utils::Range<std::uint64_t>(getAddress(), getEndAddress());
+	return retdec::common::Range<std::uint64_t>(getAddress(), getEndAddress());
 }
 
 /**
@@ -103,9 +99,9 @@ retdec::utils::Range<std::uint64_t> Segment::getAddressRange() const
  *
  * @return Address range.
  */
-retdec::utils::Range<std::uint64_t> Segment::getPhysicalAddressRange() const
+retdec::common::Range<std::uint64_t> Segment::getPhysicalAddressRange() const
 {
-	return retdec::utils::Range<std::uint64_t>(getAddress(), getPhysicalEndAddress());
+	return retdec::common::Range<std::uint64_t>(getAddress(), getPhysicalEndAddress());
 }
 
 /**
@@ -113,7 +109,7 @@ retdec::utils::Range<std::uint64_t> Segment::getPhysicalAddressRange() const
  *
  * @return List of address ranges.
  */
-const retdec::utils::RangeContainer<std::uint64_t>& Segment::getNonDecodableAddressRanges() const
+const retdec::common::RangeContainer<std::uint64_t>& Segment::getNonDecodableAddressRanges() const
 {
 	return _nonDecodableRanges;
 }
@@ -168,7 +164,7 @@ void Segment::setName(const std::string& name)
  */
 bool Segment::containsAddress(std::uint64_t address) const
 {
-	return ((getAddress() <= address) && (address <= getEndAddress()));
+	return ((getAddress() <= address) && (address < getEndAddress()));
 }
 
 /**
@@ -301,15 +297,17 @@ void Segment::shrink(std::uint64_t newAddress, std::uint64_t newSize)
  *
  * @param range Range to add.
  */
-void Segment::addNonDecodableRange(retdec::utils::Range<std::uint64_t> range)
+void Segment::addNonDecodableRange(retdec::common::Range<std::uint64_t> range)
 {
-	if (!range.contains(getAddress()) && !range.contains(getEndAddress()))
+	retdec::common::Range<std::uint64_t> secRange(getAddress(), getPhysicalEndAddress());
+	if (!secRange.overlaps(range))
 		return;
 
-	range.setStart(std::max(range.getStart(), getAddress()));
-	range.setEnd(std::min(range.getEnd(), getPhysicalEndAddress()));
+	range.setStartEnd(
+			std::max(range.getStart(), secRange.getStart()),
+			std::min(range.getEnd(), secRange.getEnd()));
 
-	_nonDecodableRanges.addRange(std::move(range));
+	_nonDecodableRanges.insert(std::move(range));
 }
 
 } // namespace loader

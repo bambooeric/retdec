@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include "retdec/fileformat/file_format/intel_hex/intel_hex_format.h"
+#include "fileformat/fileformat_tests.h"
 
 using namespace ::testing;
 
@@ -40,11 +41,6 @@ class IntelHexTokenTests : public Test
 			token.checksum.push_back('F');
 			token.checksum.push_back('C');
 		}
-
-		~IntelHexTokenTests()
-		{
-
-		}
 };
 
 TEST_F(IntelHexTokenTests, ChecksumValid)
@@ -52,7 +48,6 @@ TEST_F(IntelHexTokenTests, ChecksumValid)
 	token.controlChecksum();
 	EXPECT_EQ(true, token.checksumValid);
 }
-
 
 TEST_F(IntelHexTokenTests, InvalidData)
 {

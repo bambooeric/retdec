@@ -7,23 +7,8 @@
 #include "fileinfo/file_information/file_information_types/export_table.h"
 #include "fileinfo/file_information/file_information_types/type_conversions.h"
 
+namespace retdec {
 namespace fileinfo {
-
-/**
- * Constructor
- */
-ExportTable::ExportTable() : table(nullptr)
-{
-
-}
-
-/**
- * Destructor
- */
-ExportTable::~ExportTable()
-{
-
-}
 
 /**
  * Get number of exports in table
@@ -32,6 +17,33 @@ ExportTable::~ExportTable()
 std::size_t ExportTable::getNumberOfExports() const
 {
 	return table ? table->getNumberOfExports() : 0;
+}
+
+/**
+ * Get exphash as CRC32
+ * @return Exphash as CRC32
+ */
+std::string ExportTable::getExphashCrc32() const
+{
+	return table ? table->getExphashCrc32() : "";
+}
+
+/**
+ * Get exphash as MD5
+ * @return Exphash as MD5
+ */
+std::string ExportTable::getExphashMd5() const
+{
+	return table ? table->getExphashMd5() : "";
+}
+
+/**
+ * Get exphash as SHA256
+ * @return Exphash as SHA256
+ */
+std::string ExportTable::getExphashSha256() const
+{
+	return table ? table->getExphashSha256() : "";
 }
 
 /**
@@ -89,3 +101,4 @@ bool ExportTable::hasRecords() const
 }
 
 } // namespace fileinfo
+} // namespace retdec

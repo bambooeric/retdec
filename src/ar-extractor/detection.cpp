@@ -1,5 +1,5 @@
 /**
- * @file preprocessing/ar_extractor/detection.cpp
+ * @file src/ar-extractor/detection.cpp
  * @brief Detection methods.
  * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
@@ -7,8 +7,9 @@
 #include <fstream>
 #include <istream>
 
+#include <llvm/Object/MachO.h>
+#include <llvm/Object/MachOUniversal.h>
 #include <llvm/Support/Host.h>
-#include <llvm/Support/MachO.h>
 #include <llvm/Support/SwapByteOrder.h>
 
 #include "retdec/utils/string.h"
@@ -46,7 +47,6 @@ constexpr std::size_t arMagicSize = 7;
  */
 constexpr std::size_t fatLoadSize = sizeof(fat_header) + sizeof(fat_arch_64);
 
-
 /**
  * Byte order swap of structure if necessary.
  *
@@ -63,7 +63,6 @@ inline void swapStructByteOrderIfNecessary(
 		llvm::MachO::swapStruct(structure);
 	}
 }
-
 
 /**
  * Check for archive magic string in Mach-O file.
@@ -112,7 +111,6 @@ bool isArchive(
 	return false;
 }
 
-
 /**
  * Check if file is a thin archive.
  *
@@ -134,7 +132,6 @@ bool isThinArchive(
 	return false;
 }
 
-
 /**
  * Check if file is a normal (not thin) archive.
  *
@@ -155,7 +152,6 @@ bool isNormalArchive(
 
 	return false;
 }
-
 
 /**
  * Check if file is a Mach-O Universal Binary archive.

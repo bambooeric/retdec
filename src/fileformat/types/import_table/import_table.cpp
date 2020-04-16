@@ -562,27 +562,10 @@ std::string ordLookUp(const std::string& libName, const std::size_t& ordNum)
 	return res.empty() ? "ord" + std::to_string(ordNum) : res;
 }
 
-
 } // anonymous namespace
 
 namespace retdec {
 namespace fileformat {
-
-/**
- * Constructor
- */
-ImportTable::ImportTable()
-{
-
-}
-
-/**
- * Destructor
- */
-ImportTable::~ImportTable()
-{
-
-}
 
 /**
  * Get number of libraries which are imported
@@ -668,7 +651,7 @@ std::size_t ImportTable::getNumberOfImportsInLibraryCaseInsensitive(const std::s
  * Get imphash as CRC32
  * @return Imphash as CRC32
  */
-std::string ImportTable::getImphashCrc32() const
+const std::string& ImportTable::getImphashCrc32() const
 {
 	return impHashCrc32;
 }
@@ -677,7 +660,7 @@ std::string ImportTable::getImphashCrc32() const
  * Get imphash as MD5
  * @return Imphash as MD5
  */
-std::string ImportTable::getImphashMd5() const
+const std::string& ImportTable::getImphashMd5() const
 {
 	return impHashMd5;
 }
@@ -686,9 +669,18 @@ std::string ImportTable::getImphashMd5() const
  * Get imphash as SHA256
  * @return Imphash as SHA256
  */
-std::string ImportTable::getImphashSha256() const
+const std::string& ImportTable::getImphashSha256() const
 {
 	return impHashSha256;
+}
+
+/**
+ * Get list of missing dependencies
+ * @return Vector of missing dependencies
+ */
+const std::vector<std::string> & ImportTable::getMissingDependencies() const
+{
+	return missingDeps;
 }
 
 /**
@@ -807,13 +799,18 @@ void ImportTable::computeHashes()
 		// Yara adds comma if there are multiple imports
 		if(!impHashBytes.empty())
 		{
-			impHashBytes.push_back(static_cast<unsigned char>(','));
+			impHashBytes.push_back(static_cast<std::uint8_t>(','));
 		}
 
 		for(const auto c : std::string(libName + "." + funcName))
 		{
-			impHashBytes.push_back(static_cast<unsigned char>(c));
+			impHashBytes.push_back(static_cast<std::uint8_t>(c));
 		}
+	}
+
+	if (impHashBytes.size() == 0)
+	{
+		return;
 	}
 
 	impHashCrc32 = retdec::crypto::getCrc32(impHashBytes.data(), impHashBytes.size());
@@ -826,7 +823,6 @@ void ImportTable::computeHashes()
  */
 void ImportTable::clear()
 {
-	impHashBytes.clear();
 	libraries.clear();
 	imports.clear();
 	impHashCrc32.clear();
@@ -837,14 +833,16 @@ void ImportTable::clear()
 /**
  * Add name of imported library
  * @param name Name of imported library
+ * @param isMissingDependency If true, then it means that the library name might be a missing dependency (aka not normally present on the OS)
  *
  * Order in which are libraries added must be same as order of libraries import in input file
  */
-void ImportTable::addLibrary(std::string name)
+void ImportTable::addLibrary(std::string name, bool isMissingDependency)
 {
+	if(isMissingDependency)
+		missingDeps.push_back(name);
 	libraries.push_back(name);
 }
-
 
 /**
  * Add import
@@ -919,6 +917,16 @@ bool ImportTable::hasImport(const std::string &name) const
 bool ImportTable::hasImport(unsigned long long address) const
 {
 	return getImportOnAddress(address);
+}
+
+/**
+ * @return @c True if import hashes are invalid, @c False otherwise.
+ */
+bool ImportTable::invalidImpHash() const
+{
+	return getImphashCrc32().empty()
+			|| getImphashMd5().empty()
+			|| getImphashSha256().empty();
 }
 
 /**

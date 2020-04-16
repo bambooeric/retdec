@@ -1,5 +1,5 @@
 /**
- * @file include/retdec/cpdetec/settings.h
+ * @file include/retdec/cpdetect/settings.h
  * @brief Settings for compiler detection.
  * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
@@ -24,7 +24,8 @@ const std::size_t EP_BYTES_SIZE = 50;
 const std::set<std::string> EXTERNAL_DATABASE_SUFFIXES =
 {
 	".yar",
-	".yara"
+	".yara",
+	".yarac"
 };
 
 const std::string YARA_RULES_PATH = "../share/retdec/support/generic/yara_patterns/tools/";

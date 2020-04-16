@@ -8,11 +8,8 @@
 
 using namespace retdec::fileformat;
 
+namespace retdec {
 namespace fileinfo {
-
-ElfNotes::ElfNotes()
-{
-}
 
 std::string ElfNotes::getSectionName() const
 {
@@ -79,6 +76,5 @@ void ElfNotes::addNoteEntry(const ElfNoteEntry& noteEntry)
 	notes.emplace_back(noteEntry);
 }
 
-
-
 } // namespace fileinfo
+} // namespace retdec

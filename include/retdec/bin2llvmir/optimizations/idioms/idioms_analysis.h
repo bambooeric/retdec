@@ -27,11 +27,6 @@
 #include "retdec/bin2llvmir/optimizations/idioms/idioms_vstudio.h"
 #include "retdec/bin2llvmir/providers/config.h"
 
-#ifdef DEBUG_TYPE
-#undef DEBUG_TYPE // "idioms"
-#endif // DEBUG_TYPE "idioms"
-#define DEBUG_TYPE "idioms"
-
 namespace retdec {
 namespace bin2llvmir {
 
@@ -45,19 +40,15 @@ class IdiomsAnalysis:
 	public IdiomsOWatcom,
 	public IdiomsVStudio  {
 public:
-	IdiomsAnalysis(llvm::Module * M, Config* c, CC_compiler cc, CC_arch arch)
+	IdiomsAnalysis(llvm::Module * M, CC_compiler cc, CC_arch arch)
 	{
-		init(M, c, cc, arch);
+		init(M, cc, arch);
 	}
 	virtual bool doAnalysis(llvm::Function & f, llvm::Pass * p) override;
 
 private:
 	bool analyse(llvm::Function & f, llvm::Pass * p, int (IdiomsAnalysis::*exchanger)(llvm::Function &, llvm::Pass *) const, const char * fname);
 	bool analyse(llvm::BasicBlock & bb, llvm::Instruction * (IdiomsAnalysis::*exchanger)(llvm::BasicBlock::iterator) const, const char * fname);
-
-	void print_dbg(const char * str, const llvm::Instruction & i) const {
-		DEBUG(llvm::errs() << str << " detected an idiom starting at " << i.getName() << "\n");
-	}
 };
 
 } // namespace bin2llvmir

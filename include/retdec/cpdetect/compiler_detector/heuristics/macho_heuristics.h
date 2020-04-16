@@ -1,5 +1,5 @@
 /**
- * @file include/retdec/cpdetec/compiler_detector/heuristics/macho_heuristics.h
+ * @file include/retdec/cpdetect/compiler_detector/heuristics/macho_heuristics.h
  * @brief Definition of MachOHeuristics class.
  * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
@@ -37,7 +37,6 @@ class MachOHeuristics : public Heuristics
 		MachOHeuristics(
 				retdec::fileformat::MachOFormat &parser, Search &searcher,
 				ToolInformation &toolInfo);
-		virtual ~MachOHeuristics() override;
 };
 
 } // namespace cpdetect

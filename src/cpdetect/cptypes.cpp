@@ -19,30 +19,6 @@ DetectParams::DetectParams(SearchType searchType_, bool internal_, bool external
 }
 
 /**
- * Destructor of DetectParams structure
- */
-DetectParams::~DetectParams()
-{
-
-}
-
-/**
- * Constructor of DetectResult structure
- */
-DetectResult::DetectResult()
-{
-
-}
-
-/**
- * Destructor of DetectResult structure
- */
-DetectResult::~DetectResult()
-{
-
-}
-
-/**
  * Check if result is reliable
  * @return @c true if detected result is reliable, @c false otherwise
  */
@@ -103,41 +79,6 @@ bool DetectResult::isKnownType() const
 bool DetectResult::isUnknownType() const
 {
 	return type == ToolType::UNKNOWN;
-}
-
-/**
- * Constructor of DetectLanguage structure
- */
-DetectLanguage::DetectLanguage() : bytecode(false)
-{
-
-}
-
-/**
- * Destructor of DetectLanguage structure
- */
-DetectLanguage::~DetectLanguage()
-{
-
-}
-
-/**
- * Constructor of CompilerInformation structure
- */
-ToolInformation::ToolInformation()
-	: epOffset(std::numeric_limits<unsigned long long>::max()),
-		epAddress(std::numeric_limits<unsigned long long>::max()),
-		imageBase(std::numeric_limits<unsigned long long>::max())
-{
-
-}
-
-/**
- * Destructor of CompilerInformation structure
- */
-ToolInformation::~ToolInformation()
-{
-
 }
 
 /**
@@ -302,23 +243,6 @@ Packed ToolInformation::isPacked() const
 	}
 }
 
-
-/**
- * Constructor of Similarity structure
- */
-Similarity::Similarity() : same(0), total(0), ratio(0.0)
-{
-
-}
-
-/**
- * Destructor of Similarity structure
- */
-Similarity::~Similarity()
-{
-
-}
-
 /**
  * Get detection method name as string
  * @param method method type
@@ -368,6 +292,9 @@ std::string detectionMetodToString(DetectionMethod method)
 
 		case DetectionMethod::MANIFEST_H:
 			return "manifest heuristic";
+
+		case DetectionMethod::HEADER_H:
+			return "dos header style";
 
 		case DetectionMethod::OTHER_H:
 			return "heuristic";

@@ -10,6 +10,7 @@
 #include "fileinfo/file_detector/file_detector.h"
 #include "fileinfo/file_wrapper/elf_wrapper.h"
 
+namespace retdec {
 namespace fileinfo {
 
 /**
@@ -30,8 +31,8 @@ class ElfDetector : public FileDetector
 		void getSegments();
 		void getSymbolTable();
 		void getRelocationTable(const ELFIO::section *sec);
-		void getDynamicSection(const ELFIO::section *sec);
 		void getSections();
+		void getDynamicSectionsSegments();
 		void getNotes();
 		void getCoreInfo();
 		/// @}
@@ -45,10 +46,14 @@ class ElfDetector : public FileDetector
 		virtual retdec::cpdetect::CompilerDetector* createCompilerDetector() const override;
 		/// @}
 	public:
-		ElfDetector(std::string pathToInputFile, FileInformation &finfo, retdec::cpdetect::DetectParams &searchPar, retdec::fileformat::LoadFlags loadFlags);
-		virtual ~ElfDetector() override;
+		ElfDetector(
+				std::string pathToInputFile,
+				FileInformation &finfo,
+				retdec::cpdetect::DetectParams &searchPar,
+				retdec::fileformat::LoadFlags loadFlags);
 };
 
 } // namespace fileinfo
+} // namespace retdec
 
 #endif

@@ -1,5 +1,5 @@
 /**
- * @file include/retdec/fileformat/types/note_section/elf_core.cpp
+ * @file include/retdec/fileformat/types/note_section/elf_core.h
  * @brief Class for ELF core data.
  * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
@@ -11,7 +11,7 @@
 #include <vector>
 #include <map>
 
-#include "retdec/utils/address.h"
+#include "retdec/common/address.h"
 
 namespace retdec {
 namespace fileformat {

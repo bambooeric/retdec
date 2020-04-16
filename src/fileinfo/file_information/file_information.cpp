@@ -6,14 +6,15 @@
 
 #include <algorithm>
 
-#include "retdec/utils/address.h"
+#include "retdec/common/address.h"
 #include "fileinfo/file_information/file_information.h"
 #include "fileinfo/file_information/file_information_types/type_conversions.h"
 
-using namespace retdec::utils;
+using namespace retdec::common;
 using namespace retdec::cpdetect;
 using namespace retdec::fileformat;
 
+namespace retdec {
 namespace fileinfo {
 
 namespace
@@ -34,7 +35,7 @@ bool isSubpattern(const Pattern &a, const Pattern &b)
 		{
 			continue;
 		}
-		aCont.insert(AddressRange(res1, res1 + res2 - 1));
+		aCont.insert(AddressRange(res1, res1 + res2));
 	}
 
 	if(aCont.empty())
@@ -50,7 +51,7 @@ bool isSubpattern(const Pattern &a, const Pattern &b)
 		{
 			continue;
 		}
-		auto bRange = AddressRange(res1, res1 + res2 - 1);
+		auto bRange = AddressRange(res1, res1 + res2);
 		if(std::none_of(aCont.begin(), aCont.end(),
 			[&] (const auto &aRange)
 			{
@@ -85,22 +86,6 @@ void sortPatternMatches(std::vector<Pattern> &patterns)
 }
 
 } // anonymous namespace
-
-/**
- * Constructor
- */
-FileInformation::FileInformation() : status(ReturnCode::OK), fileFormatEnum(Format::UNKNOWN)
-{
-
-}
-
-/**
- * Destructor
- */
-FileInformation::~FileInformation()
-{
-
-}
 
 /**
  * Get status
@@ -678,6 +663,15 @@ std::string FileInformation::getOverlaySizeStr(std::ios_base &(* format)(std::io
 }
 
 /**
+ * Get overlay entropy
+ * @return Overlay entropy
+ */
+std::string FileInformation::getOverlayEntropyStr(std::ios_base &(* format)(std::ios_base &)) const
+{
+	return header.getOverlayEntropyStr(format);
+}
+
+/**
  * Get number of records in rich header
  * @return Number of records in rich header
  */
@@ -727,9 +721,9 @@ std::string FileInformation::getRichHeaderKeyStr(std::ios_base &(* format)(std::
  * @param position Index of selected record from header (indexed from 0)
  * @return Major version of linker
  */
-std::string FileInformation::getRichHeaderRecordMajorVersionStr(std::size_t position) const
+std::string FileInformation::getRichHeaderRecordProductIdStr(std::size_t position) const
 {
-	return richHeader.getRecordMajorVersionStr(position);
+	return richHeader.getRecordProductIdStr(position);
 }
 
 /**
@@ -737,19 +731,9 @@ std::string FileInformation::getRichHeaderRecordMajorVersionStr(std::size_t posi
  * @param position Index of selected record from header (indexed from 0)
  * @return Minor version of linker
  */
-std::string FileInformation::getRichHeaderRecordMinorVersionStr(std::size_t position) const
+std::string FileInformation::getRichHeaderRecordProductBuildStr(std::size_t position) const
 {
-	return richHeader.getRecordMinorVersionStr(position);
-}
-
-/**
- * Get build version
- * @param position Index of selected record from header (indexed from 0)
- * @return Build version of linker
- */
-std::string FileInformation::getRichHeaderRecordBuildVersionStr(std::size_t position) const
-{
-	return richHeader.getRecordBuildVersionStr(position);
+	return richHeader.getRecordProductBuildStr(position);
 }
 
 /**
@@ -760,6 +744,26 @@ std::string FileInformation::getRichHeaderRecordBuildVersionStr(std::size_t posi
 std::string FileInformation::getRichHeaderRecordNumberOfUsesStr(std::size_t position) const
 {
 	return richHeader.getRecordNumberOfUsesStr(position);
+}
+
+/**
+ * Retrieve the product name
+ * @param position Index of selected record from header (indexed from 0)
+ * @return Product name as std::string
+ */
+std::string FileInformation::getRichHeaderRecordProductNameStr(std::size_t position) const
+{
+	return richHeader.getRecordProductNameStr(position);
+}
+
+/**
+ * Retrieve the Visual Studio name
+ * @param position Index of selected record from header (indexed from 0)
+ * @return Visual Studio name as std::string
+ */
+std::string FileInformation::getRichHeaderRecordVisualStudioNameStr(std::size_t position) const
+{
+	return richHeader.getRecordVisualStudioNameStr(position);
 }
 
 /**
@@ -779,6 +783,334 @@ std::string FileInformation::getRichHeaderRawBytesStr() const
 bool FileInformation::hasRichHeaderRecords() const
 {
 	return richHeader.hasRecords();
+}
+
+/**
+ * Check whether visual basic informations are used.
+ * @return @c true if it is used, otherwise @c false/
+ */
+bool FileInformation::isVisualBasicUsed() const
+{
+	return visualBasicInfo.isUsed();
+}
+
+/**
+ * Check whether visual basic uses P-Code.
+ * @return @c true if it does, otherwise @c false/
+ */
+bool FileInformation::getVisualBasicIsPcode() const
+{
+	return visualBasicInfo.isPcode();
+}
+
+/**
+ * Get visual basic language DLL
+ * @return Visual basic language DLL
+ */
+std::string FileInformation::getVisualBasicLanguageDLL() const
+{
+	return visualBasicInfo.getLanguageDLL();
+}
+
+/**
+ * Get visual basic backup language DLL
+ * @return Visual basic backup language DLL
+ */
+std::string FileInformation::getVisualBasicBackupLanguageDLL() const
+{
+	return visualBasicInfo.getBackupLanguageDLL();
+}
+
+/**
+ * Get visual basic project exe name
+ * @return Visual basic project exe name
+ */
+std::string FileInformation::getVisualBasicProjectExeName() const
+{
+	return visualBasicInfo.getProjectExeName();
+}
+
+/**
+ * Get visual basic project description
+ * @return Visual basic project description
+ */
+std::string FileInformation::getVisualBasicProjectDescription() const
+{
+	return visualBasicInfo.getProjectDescription();
+}
+
+/**
+ * Get visual basic project help file
+ * @return Visual basic project help file
+ */
+std::string FileInformation::getVisualBasicProjectHelpFile() const
+{
+	return visualBasicInfo.getProjectHelpFile();
+}
+
+/**
+ * Get visual basic project name
+ * @return Visual basic project name
+ */
+std::string FileInformation::getVisualBasicProjectName() const
+{
+	return visualBasicInfo.getProjectName();
+}
+
+/**
+ * Get visual basic language DLL primary LCID
+ * @return Visual basic language DLL primary LCID
+ */
+std::string FileInformation::getVisualBasicLanguageDLLPrimaryLCIDStr() const
+{
+	return visualBasicInfo.getLanguageDLLPrimaryLCIDStr();
+}
+
+/**
+ * Get visual basic language DLL secondary LCID
+ * @return Visual basic language DLL secondary LCID
+ */
+std::string FileInformation::getVisualBasicLanguageDLLSecondaryLCIDStr() const
+{
+	return visualBasicInfo.getLanguageDLLSecondaryLCIDStr();
+}
+
+/**
+ * Get visual basic project path
+ * @return Visual basic project path
+ */
+std::string FileInformation::getVisualBasicProjectPath() const
+{
+	return visualBasicInfo.getProjectPath();
+}
+
+/**
+ * Get visual basic project primary LCID
+ * @return Visual basic project primary LCID
+ */
+std::string FileInformation::getVisualBasicProjectPrimaryLCIDStr() const
+{
+	return visualBasicInfo.getProjectPrimaryLCIDStr();
+}
+
+/**
+ * Get visual basic project secondary LCID
+ * @return Visual basic project secondary LCID
+ */
+std::string FileInformation::getVisualBasicProjectSecondaryLCIDStr() const
+{
+	return visualBasicInfo.getProjectSecondaryLCIDStr();
+}
+
+/**
+ * Get visual basic object
+ * @param position Index of selected object (indexed from 0)
+ * @return Visual basic object
+ */
+const retdec::fileformat::VisualBasicObject *FileInformation::getVisualBasicObject(std::size_t position) const
+{
+	return visualBasicInfo.getObject(position);
+}
+
+/**
+ * Get visual basic extern
+ * @param position Index of selected extern (indexed from 0)
+ * @return Visual basic extern
+ */
+const retdec::fileformat::VisualBasicExtern *FileInformation::getVisualBasicExtern(std::size_t position) const
+{
+	return visualBasicInfo.getExtern(position);
+}
+
+/**
+ * Get visual basic number of objects
+ * @return Visual basic number of objects
+ */
+std::size_t FileInformation::getVisualBasicNumberOfObjects() const
+{
+	return visualBasicInfo.getNumberOfObjects();
+}
+
+/**
+ * Get visual basic number of externs
+ * @return Visual basic number of externs
+ */
+std::size_t FileInformation::getVisualBasicNumberOfExterns() const
+{
+	return visualBasicInfo.getNumberOfExterns();
+}
+
+/**
+ * Get visual basic extern module name
+ * @param position Index of selected extern (indexed from 0)
+ * @return Visual basic extern module name
+ */
+std::string FileInformation::getVisualBasicExternModuleName(std::size_t position) const
+{
+	return visualBasicInfo.getExternModuleName(position);
+}
+
+/**
+ * Get visual basic extern api name
+ * @param position Index of selected extern (indexed from 0)
+ * @return Visual basic extern api name
+ */
+std::string FileInformation::getVisualBasicExternApiName(std::size_t position) const
+{
+	return visualBasicInfo.getExternApiName(position);
+}
+
+/**
+ * Get visual basic object table GUID
+ * @return Object table GUID as string
+ */
+std::string FileInformation::getVisualBasicObjectTableGUID() const
+{
+	return visualBasicInfo.getObjectTableGUID();
+}
+
+/**
+ * Get visual basic typeLib CLSID
+ * @return typeLib CLSID as string
+ */
+std::string FileInformation::getVisualBasicTypeLibCLSID() const
+{
+	return visualBasicInfo.getTypeLibCLSID();
+}
+
+/**
+ * Get visual basic typeLib major version
+ * @return TypeLib major version
+ */
+std::string FileInformation::getVisualBasicTypeLibMajorVersionStr() const
+{
+	return visualBasicInfo.getTypeLibMajorVersionStr();
+}
+
+/**
+ * Get visual basic typeLib minor version
+ * @return TypeLib minor version
+ */
+std::string FileInformation::getVisualBasicTypeLibMinorVersionStr() const
+{
+	return visualBasicInfo.getTypeLibMinorVersionStr();
+}
+
+/**
+ * Get visual basic typeLib LCID
+ * @return Visual basic typeLib LCID
+ */
+std::string FileInformation::getVisualBasicTypeLibLCIDStr() const
+{
+	return visualBasicInfo.getTypeLibLCIDStr();
+}
+
+/**
+ * Get visual basic COM object name
+ * @return Visual basic COM object name
+ */
+std::string FileInformation::getVisualBasicCOMObjectName() const
+{
+	return visualBasicInfo.getCOMObjectName();
+}
+
+/**
+ * Get visual basic COM object description
+ * @return Visual basic COM object description
+ */
+std::string FileInformation::getVisualBasicCOMObjectDescription() const
+{
+	return visualBasicInfo.getCOMObjectDescription();
+}
+
+/**
+ * Get visual basic COM object CLSID
+ * @return Visual basic COM object CLSID
+ */
+std::string FileInformation::getVisualBasicCOMObjectCLSID() const
+{
+	return visualBasicInfo.getCOMObjectCLSID();
+}
+
+/**
+ * Get visual basic COM object interface CLSID
+ * @return Visual basic COM object interface CLSID
+ */
+std::string FileInformation::getVisualBasicCOMObjectInterfaceCLSID() const
+{
+	return visualBasicInfo.getCOMObjectInterfaceCLSID();
+}
+
+/**
+ * Get visual basic COM object events CLSID
+ * @return Visual basic COM object events CLSID
+ */
+std::string FileInformation::getVisualBasicCOMObjectEventsCLSID() const
+{
+	return visualBasicInfo.getCOMObjectEventsCLSID();
+}
+
+/**
+ * Get visual basic COM object type
+ * @return Visual basic COM object type
+ */
+std::string FileInformation::getVisualBasicCOMObjectType() const
+{
+	return visualBasicInfo.getCOMObjectType();
+}
+
+/**
+ * Get visual basic extern table hash as Crc32
+ * @return Visual basic extern table hash
+ */
+std::string FileInformation::getVisualBasicExternTableHashCrc32() const
+{
+	return visualBasicInfo.getExternTableHashCrc32();
+}
+
+/**
+ * Get visual basic extern table hash as Md5
+ * @return Visual basic extern table hash
+ */
+std::string FileInformation::getVisualBasicExternTableHashMd5() const
+{
+	return visualBasicInfo.getExternTableHashMd5();
+}
+
+/**
+ * Get visual basic extern table hash as Sha256
+ * @return Visual basic extern table hash
+ */
+std::string FileInformation::getVisualBasicExternTableHashSha256() const
+{
+	return visualBasicInfo.getExternTableHashSha256();
+}
+
+/**
+ * Get visual basic object table hash as Crc32
+ * @return Visual basic object table hash
+ */
+std::string FileInformation::getVisualBasicObjectTableHashCrc32() const
+{
+	return visualBasicInfo.getObjectTableHashCrc32();
+}
+
+/**
+ * Get visual basic object table hash as Md5
+ * @return Visual basic object table hash
+ */
+std::string FileInformation::getVisualBasicObjectTableHashMd5() const
+{
+	return visualBasicInfo.getObjectTableHashMd5();
+}
+
+/**
+ * Get visual basic object table hash as Sha256
+ * @return Visual basic object table hash
+ */
+std::string FileInformation::getVisualBasicObjectTableHashSha256() const
+{
+	return visualBasicInfo.getObjectTableHashSha256();
 }
 
 /**
@@ -904,6 +1236,16 @@ std::string FileInformation::getImportLibraryName(std::size_t position) const
 }
 
 /**
+ * Get import type
+ * @param position Index of selected import (indexed from 0)
+ * @return Symbol type
+ */
+std::string FileInformation::getImportUsageType(std::size_t position) const
+{
+	return importTable.getImportUsageType(position);
+}
+
+/**
  * Get import address
  * @param position Index of selected import (indexed from 0)
  * @param format Format of resulting string (e.g. std::dec, std::hex)
@@ -935,12 +1277,76 @@ bool FileInformation::hasImportTableRecords() const
 }
 
 /**
+ * Get number of missing dependencies
+ * @return Number of missing dependencies
+ */
+std::size_t FileInformation::getNumberOfMissingDeps() const
+{
+	return importTable.getNumberOfMissingDeps();
+}
+
+/**
+ * Get missing dependency name
+ * @param position Index of selected dependency (indexed from 0)
+ * @return Name of the missing dependency
+ */
+std::string FileInformation::getMissingDepName(std::size_t position) const
+{
+	return importTable.getMissingDepName(position);
+}
+
+/**
+ * Get the name of the dependency file that failed to load
+ * @return Name of the failed-to-load dependency listfile
+ */
+std::string FileInformation::getDepsListFailedToLoad() const
+{
+	return failedDepsList;
+}
+
+/**
+ * Sets the name of the dependency file that failed to load
+ * @return Nothing
+ */
+void FileInformation::setDepsListFailedToLoad(const std::string & depsList)
+{
+	failedDepsList = depsList;
+}
+
+/**
  * Get number of stored exports
  * @return Number of stored exports
  */
 std::size_t FileInformation::getNumberOfStoredExports() const
 {
 	return exportTable.getNumberOfExports();
+}
+
+/**
+ * Get exphash as CRC32
+ * @return Exphash as CRC32
+ */
+std::string FileInformation::getExphashCrc32() const
+{
+	return exportTable.getExphashCrc32();
+}
+
+/**
+ * Get exphash as MD5
+ * @return Exphash as MD5
+ */
+std::string FileInformation::getExphashMd5() const
+{
+	return exportTable.getExphashMd5();
+}
+
+/**
+ * Get exphash as SHA256
+ * @return Exphash as SHA256
+ */
+std::string FileInformation::getExphashSha256() const
+{
+	return exportTable.getExphashSha256();
 }
 
 /**
@@ -994,6 +1400,24 @@ std::size_t FileInformation::getNumberOfStoredResources() const
 }
 
 /**
+ * Get number of supported version info languages
+ * @return Number of supported version info languages
+ */
+std::size_t FileInformation::getNumberOfVersionInfoLanguages() const
+{
+	return resourceTable.getNumberOfLanguages();
+}
+
+/**
+ * Get number of version info strings
+ * @return Number of version info strings
+ */
+std::size_t FileInformation::getNumberOfVersionInfoStrings() const
+{
+	return resourceTable.getNumberOfStrings();
+}
+
+/**
  * Get CRC32 of selected resource
  * @param index Index of selected resource (indexed from 0)
  * @return CRC32 of selected resource
@@ -1024,6 +1448,42 @@ std::string FileInformation::getResourceSha256(std::size_t index) const
 }
 
 /**
+ * Get iconhash as CRC32
+ * @return ResourceIconhash as CRC32
+ */
+std::string FileInformation::getResourceIconhashCrc32() const
+{
+	return resourceTable.getResourceIconhashCrc32();
+}
+
+/**
+ * Get iconhash as MD5
+ * @return ResourceIconhash as MD5
+ */
+std::string FileInformation::getResourceIconhashMd5() const
+{
+	return resourceTable.getResourceIconhashMd5();
+}
+
+/**
+ * Get iconhash as SHA256
+ * @return ResourceIconhash as SHA256
+ */
+std::string FileInformation::getResourceIconhashSha256() const
+{
+	return resourceTable.getResourceIconhashSha256();
+}
+
+/**
+ * Get icon perceptual hash as AvgHash
+ * @return Icon perceptual hash as AvgHash
+ */
+std::string FileInformation::getResourceIconPerceptualAvgHash() const
+{
+	return resourceTable.getResourceIconPerceptualAvgHash();
+}
+
+/**
  * Get name of selected resource
  * @param index Index of selected resource (indexed from 0)
  * @return Name of selected resource
@@ -1051,6 +1511,46 @@ std::string FileInformation::getResourceType(std::size_t index) const
 std::string FileInformation::getResourceLanguage(std::size_t index) const
 {
 	return resourceTable.getResourceLanguage(index);
+}
+
+/**
+ * Get LCID of selected version info language
+ * @param index Index of selected version info language (indexed from 0)
+ * @return LCID of selected version info language
+ */
+std::string FileInformation::getVersionInfoLanguageLcid(std::size_t index) const
+{
+	return resourceTable.getLanguageLcid(index);
+}
+
+/**
+ * Get code page of selected version info language
+ * @param index Index of selected version info language (indexed from 0)
+ * @return Code page of selected version info language
+ */
+std::string FileInformation::getVersionInfoLanguageCodePage(std::size_t index) const
+{
+	return resourceTable.getLanguageCodePage(index);
+}
+
+/**
+ * Get name of selected version info string
+ * @param index Index of selected version info string (indexed from 0)
+ * @return Name of selected version info string
+ */
+std::string FileInformation::getVersionInfoStringName(std::size_t index) const
+{
+	return resourceTable.getStringName(index);
+}
+
+/**
+ * Get value of selected version info string
+ * @param index Index of selected version info string (indexed from 0)
+ * @return Value of selected version info string
+ */
+std::string FileInformation::getVersionInfoStringValue(std::size_t index) const
+{
+	return resourceTable.getStringValue(index);
 }
 
 /**
@@ -1117,6 +1617,15 @@ std::string FileInformation::getResourceOffsetStr(std::size_t index, std::ios_ba
 std::string FileInformation::getResourceSizeStr(std::size_t index, std::ios_base &(* format)(std::ios_base &)) const
 {
 	return resourceTable.getResourceSizeStr(index, format);
+}
+
+/**
+ * Find out if there are any records in resource table
+ * @return @c true if resource table is not empty, @c false otherwise
+ */
+bool FileInformation::hasResourceTableRecords() const
+{
+	return resourceTable.hasRecords();
 }
 
 /**
@@ -1575,6 +2084,94 @@ bool FileInformation::hasCertificateTableCounterSignerCertificate() const
 }
 
 /**
+ * Get start address of raw data of TLS
+ * @param format Format of result (e.g. std::dec, std::hex)
+ * @return Start address of raw data of TLS
+ */
+std::string FileInformation::getTlsRawDataStartAddrStr(std::ios_base &(* format)(std::ios_base &)) const
+{
+	return tlsInfo.getRawDataStartAddrStr(format);
+}
+
+/**
+ * Get end address of raw data of TLS
+ * @param format Format of result (e.g. std::dec, std::hex)
+ * @return End address of raw data of TLS
+ */
+std::string FileInformation::getTlsRawDataEndAddrStr(std::ios_base &(* format)(std::ios_base &)) const
+{
+	return tlsInfo.getRawDataEndAddrStr(format);
+}
+
+/**
+ * Get address of index of TLS
+ * @param format Format of result (e.g. std::dec, std::hex)
+ * @return Address of index of TLS
+ */
+std::string FileInformation::getTlsIndexAddrStr(std::ios_base &(* format)(std::ios_base &)) const
+{
+	return tlsInfo.getIndexAddrStr(format);
+}
+
+/**
+ * Get address of callbacks of TLS
+ * @param format Format of result (e.g. std::dec, std::hex)
+ * @return Address of callbacks of TLS
+ */
+std::string FileInformation::getTlsCallBacksAddrStr(std::ios_base &(* format)(std::ios_base &)) const
+{
+	return tlsInfo.getCallBacksAddrStr(format);
+}
+
+/**
+ * Get size of zero fill of TLS
+ * @param format Format of result (e.g. std::dec, std::hex)
+ * @return Size of zero fill of TLS
+ */
+std::string FileInformation::getTlsZeroFillSizeStr(std::ios_base &(* format)(std::ios_base &)) const
+{
+	return tlsInfo.getZeroFillSizeStr(format);
+}
+
+/**
+ * Get characteristics of TLS
+ * @return Characteristics of TLS
+ */
+std::string FileInformation::getTlsCharacteristicsStr() const
+{
+	return tlsInfo.getCharacteristicsStr();
+}
+
+/**
+ * Get number of callbacks of TLS
+ * @return Number of callbacks of TLS
+ */
+std::size_t FileInformation::getTlsNumberOfCallBacks() const
+{
+	return tlsInfo.getNumberOfCallBacks();
+}
+
+/**
+ * Get TLS callback
+ * @param position Position of directory in internal list of directories (0..x)
+ * @param format Format of result (e.g. std::dec, std::hex)
+ * @return TLS callback
+ */
+std::string FileInformation::getTlsCallBackAddrStr(std::size_t position, std::ios_base &(* format)(std::ios_base &)) const
+{
+	return tlsInfo.getCallBackAddrStr(position, format);
+}
+
+/**
+ * Check whether TLS is used
+ * @return @c true if TLS is used, @c false otherwise
+ */
+bool FileInformation::isTlsUsed() const
+{
+	return tlsInfo.isUsed();
+}
+
+/**
  * Get type of data directory
  * @param position Position of directory in internal list of directories (0..x)
  * @return Type of data directory
@@ -1791,6 +2388,17 @@ std::string FileInformation::getSectionName(std::size_t position) const
 std::string FileInformation::getSectionType(std::size_t position) const
 {
 	return sections[position].getType();
+}
+
+/**
+ * Get section entropy
+ * @param position Position of section in internal list of sections (0..x)
+ * @param format Format of resulting string (e.g. std::dec, std::hex)
+ * @return Entropy of section
+ */
+std::string FileInformation::getSectionEntropy(std::size_t position, std::ios_base &(* format)(std::ios_base &)) const
+{
+	return sections[position].getEntropyStr(format);
 }
 
 /**
@@ -2048,7 +2656,6 @@ std::size_t FileInformation::getNumberOfStoredSymbolsInTable(std::size_t positio
 	return symbolTables[position].getNumberOfStoredSymbols();
 }
 
-
 /**
  * Get number of symbols stored in symbol table
  * @param position Position of table in internal list of symbol tables (0..x)
@@ -2061,7 +2668,6 @@ std::string FileInformation::getNumberOfDeclaredSymbolsInTableStr(std::size_t po
 {
 	return symbolTables[position].getNumberOfDeclaredSymbolsStr();
 }
-
 
 /**
  * Get name of symbol table
@@ -2608,7 +3214,7 @@ bool FileInformation::hasStrings() const
  */
 bool FileInformation::isSignaturePresent() const
 {
-	return signatureVerified.isDefined();
+	return signatureVerified.has_value();
 }
 
 /**
@@ -2617,7 +3223,7 @@ bool FileInformation::isSignaturePresent() const
  */
 bool FileInformation::isSignatureVerified() const
 {
-	return signatureVerified.isDefined() && signatureVerified.getValue();
+	return signatureVerified.has_value() && signatureVerified.value();
 }
 
 /**
@@ -2779,6 +3385,92 @@ bool FileInformation::isDotnetUsed() const
 const std::string& FileInformation::getDotnetRuntimeVersion() const
 {
 	return dotnetInfo.getRuntimeVersion();
+}
+
+/**
+ * Get imported class name
+ * @param position Index of selected imported class (indexed from 0)
+ * @return Name of selected imported class
+ */
+std::string FileInformation::getDotnetImportedClassName(std::size_t position) const
+{
+	return dotnetInfo.getImportedClassName(position);
+}
+
+/**
+ * Get imported class nested name
+ * @param position Index of selected imported class (indexed from 0)
+ * @return Nested name of selected imported class
+ */
+std::string FileInformation::getDotnetImportedClassNestedName(std::size_t position) const
+{
+	return dotnetInfo.getImportedClassNestedName(position);
+}
+
+/**
+ * Get imported class name with parent class presentation index
+ * @param position Index of selected imported class (indexed from 0)
+ * @return Name of selected imported class with parent class presentation index
+ */
+std::string FileInformation::getDotnetImportedClassNameWithParentClassIndex(std::size_t position) const
+{
+	return dotnetInfo.getImportedClassNameWithParentClassIndex(position);
+}
+
+/**
+ * Get imported class library name
+ * @param position Index of selected imported class (indexed from 0)
+ * @return Library name of selected imported class
+ */
+std::string FileInformation::getDotnetImportedClassLibName(std::size_t position) const
+{
+	return dotnetInfo.getImportedClassLibName(position);
+}
+
+/**
+ * Get imported class namespace
+ * @param position Index of selected imported class (indexed from 0)
+ * @return Namespace of selected imported class
+ */
+std::string FileInformation::getDotnetImportedClassNameSpace(std::size_t position) const
+{
+	return dotnetInfo.getImportedClassNameSpace(position);
+}
+
+/**
+ * Get dotnet typeref hash as CRC32
+ * @return Typeref hash as CRC32
+ */
+std::string FileInformation::getDotnetTypeRefhashCrc32() const
+{
+	return dotnetInfo.getTypeRefhashCrc32();
+}
+
+/**
+ * Get dotnet typeref hash as MD5
+ * @return Typeref hash as MD5
+ */
+std::string FileInformation::getDotnetTypeRefhashMd5() const
+{
+	return dotnetInfo.getTypeRefhashMd5();
+}
+
+/**
+ * Get dotnet typeref hash as SHA256
+ * @return Typeref hash as SHA256
+ */
+std::string FileInformation::getDotnetTypeRefhashSha256() const
+{
+	return dotnetInfo.getTypeRefhashSha256();
+}
+
+/**
+ * Get number of stored imported dotnet classes
+ * @return Number of stored imported dotnet classes
+ */
+std::size_t FileInformation::getNumberOfStoredDotnetImportedClasses() const
+{
+	return dotnetInfo.getNumberOfImportedClasses();
 }
 
 /**
@@ -2979,6 +3671,44 @@ bool FileInformation::hasDotnetUserStringStream() const
 bool FileInformation::hasDotnetTypeLibId() const
 {
 	return dotnetInfo.hasTypeLibId();
+}
+
+/**
+ * Find out if there are any records in typeref table
+ * @return @c true if typeref is not empty, @c false otherwise
+ */
+bool FileInformation::hasDotnetTypeRefTableRecords() const
+{
+	return dotnetInfo.hasImportedClassListRecords();
+}
+
+/**
+ * Get number of anomalies
+ * @return Number of anomalies
+ */
+std::size_t FileInformation::getNumberOfAnomalies() const
+{
+	return anomalies.size();
+}
+
+/**
+ * Get identifier of anomaly
+ * @param position Index of selected anomaly (indexed from 0)
+ * @return Identifier of selected anomaly
+ */
+std::string FileInformation::getAnomalyIdentifier(std::size_t position) const
+{
+	return (position < getNumberOfAnomalies()) ? anomalies[position].first : "";
+}
+
+/**
+ * Get description of anomaly
+ * @param position Index of selected anomaly (indexed from 0)
+ * @return Description of selected anomaly
+ */
+std::string FileInformation::getAnomalyDescription(std::size_t position) const
+{
+	return (position < getNumberOfAnomalies()) ? anomalies[position].second : "";
 }
 
 /**
@@ -3414,12 +4144,39 @@ void FileInformation::setOverlaySize(unsigned long long size)
 }
 
 /**
+ * Set overlay entropy
+ * @param entropy Entropy of overlay
+ */
+void FileInformation::setOverlayEntropy(double entropy)
+{
+	header.setOverlayEntropy(entropy);
+}
+
+/**
  * Set rich header
  * @param rHeader Information about rich header
  */
 void FileInformation::setRichHeader(const retdec::fileformat::RichHeader *rHeader)
 {
 	richHeader.setHeader(rHeader);
+}
+
+/**
+ * Set visual basic information
+ * @param vbInfo Information about visual basic
+ */
+void FileInformation::setVisualBasicInfo(const retdec::fileformat::VisualBasicInfo *vbInfo)
+{
+	visualBasicInfo.setInfo(vbInfo);
+}
+
+/**
+ * Sets whether visual basic informations are used.
+ * @param set @c true if used, otherwise @c false.
+ */
+void FileInformation::setVisualBasicUsed(bool set)
+{
+	visualBasicInfo.setUsed(set);
 }
 
 /**
@@ -3486,6 +4243,15 @@ void FileInformation::setExportTable(const retdec::fileformat::ExportTable *sTab
 }
 
 /**
+ * Set resource table
+ * @param sTable Information about resource table
+ */
+void FileInformation::setResourceTable(const retdec::fileformat::ResourceTable *sTable)
+{
+	resourceTable.setTable(sTable);
+}
+
+/**
  * Set pointer to detected strings
  * @param sStrings Pointer to detected strings
  */
@@ -3501,6 +4267,15 @@ void FileInformation::setStrings(const std::vector<retdec::fileformat::String> *
 void FileInformation::setCertificateTable(const retdec::fileformat::CertificateTable *sTable)
 {
 	certificateTable.setTable(sTable);
+}
+
+/**
+ * Set TLS information
+ * @param info Information TLS
+ */
+void FileInformation::setTlsInfo(const retdec::fileformat::TlsInfo *info)
+{
+	tlsInfo.setTlsInfo(info);
 }
 
 /**
@@ -3532,7 +4307,7 @@ void FileInformation::setLoaderStatusMessage(const std::string& statusMessage)
 
 /**
 * Sets loader error message.
-* @param statusMessage The loader error message.
+* @param ldrErrInfo The loader error message.
 */
 void FileInformation::setLoaderErrorInfo(const retdec::fileformat::LoaderErrorInfo & ldrErrInfo)
 {
@@ -3654,6 +4429,42 @@ void FileInformation::setDotnetImportedClassList(const std::vector<std::shared_p
 }
 
 /**
+ * Sets .NET typeref hash as CRC32.
+ * @param crc32 Hash as CRC32.
+ */
+void FileInformation::setDotnetTypeRefhashCrc32(const std::string& crc32)
+{
+	dotnetInfo.setTypeRefhashCrc32(crc32);
+}
+
+/**
+ * Sets .NET typeref hash as MD5.
+ * @param md5 Hash as MD5.
+ */
+void FileInformation::setDotnetTypeRefhashMd5(const std::string& md5)
+{
+	dotnetInfo.setTypeRefhashMd5(md5);
+}
+
+/**
+ * Sets .NET typeref hash as SHA256.
+ * @param sha256 Hash as SHA256.
+ */
+void FileInformation::setDotnetTypeRefhashSha256(const std::string& sha256)
+{
+	dotnetInfo.setTypeRefhashSha256(sha256);
+}
+
+/**
+ * Sets anomalies
+ * @param anom Anomalies
+ */
+void FileInformation::setAnomalies(const std::vector<std::pair<std::string,std::string>> &anom)
+{
+	anomalies = anom;
+}
+
+/**
  * Add file flag descriptor
  * @param descriptor Descriptor (full description of flag)
  * @param abbreviation Abbreviation (short description of flag)
@@ -3687,23 +4498,6 @@ void FileInformation::addDllFlagsDescriptor(std::string descriptor, std::string 
 void FileInformation::clearDllFlagsDescriptors()
 {
 	header.clearDllFlagsDescriptors();
-}
-
-/**
- * Add resource to resource table
- * @param resource Resource to add
- */
-void FileInformation::addResource(Resource &resource)
-{
-	resourceTable.addResource(resource);
-}
-
-/**
- * Delete all resources from resource table
- */
-void FileInformation::clearResources()
-{
-	resourceTable.clearResources();
 }
 
 /**
@@ -3878,3 +4672,4 @@ void FileInformation::addLoadedSegment(const LoadedSegment& segment)
 }
 
 } // namespace fileinfo
+} // namespace retdec

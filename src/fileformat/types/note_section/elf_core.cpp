@@ -1,5 +1,5 @@
 /**
- * @file src/fileformat/types/note_section/elf_note.cpp
+ * @file src/fileformat/types/note_section/elf_core.cpp
  * @brief Class for ELF core data.
  * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
@@ -148,7 +148,6 @@ void ElfCoreInfo::dump(std::ostream& outStream)
 		}
 	}
 }
-
 
 } // namespace fileformat
 } // namespace retdec

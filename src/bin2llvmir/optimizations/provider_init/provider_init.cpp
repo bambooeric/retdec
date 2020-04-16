@@ -8,22 +8,18 @@
 
 #include <llvm/Support/CommandLine.h>
 
-#include "retdec/llvm-support/utils.h"
 #include "retdec/bin2llvmir/optimizations/provider_init/provider_init.h"
-#include "retdec/bin2llvmir/providers/abi.h"
+#include "retdec/bin2llvmir/analyses/symbolic_tree.h"
+#include "retdec/bin2llvmir/providers/abi/abi.h"
 #include "retdec/bin2llvmir/providers/asm_instruction.h"
 #include "retdec/bin2llvmir/providers/config.h"
 #include "retdec/bin2llvmir/providers/debugformat.h"
 #include "retdec/bin2llvmir/providers/demangler.h"
 #include "retdec/bin2llvmir/providers/fileimage.h"
 #include "retdec/bin2llvmir/providers/lti.h"
-#include "retdec/bin2llvmir/utils/defs.h"
-#include "retdec/bin2llvmir/utils/instruction.h"
+#include "retdec/bin2llvmir/providers/names.h"
 
-using namespace retdec::llvm_support;
 using namespace llvm;
-
-#define debug_enabled false
 
 namespace retdec {
 namespace bin2llvmir {
@@ -43,10 +39,15 @@ cl::opt<std::string> ConfigPath(
 		cl::init("")
 );
 
-ProviderInitialization::ProviderInitialization() :
+ProviderInitialization::ProviderInitialization(retdec::config::Config* c) :
 		ModulePass(ID)
 {
+	setConfig(c);
+}
 
+void ProviderInitialization::setConfig(retdec::config::Config* c)
+{
+	_config = c;
 }
 
 /**
@@ -55,55 +56,100 @@ ProviderInitialization::ProviderInitialization() :
 bool ProviderInitialization::runOnModule(Module& m)
 {
 	static bool firstRun = true;
-	std::string confPath = ConfigPath;
-	if (firstRun && !confPath.empty())
+	if (!firstRun)
 	{
-		LOG << "first run" << std::endl;
-
-		auto* c = ConfigProvider::addConfigFile(&m, confPath);
-		assert(c);
-		if (c == nullptr)
-		{
-			return false;
-		}
-
-		auto* d = DemanglerProvider::addDemangler(
-				&m,
-				c->getConfig().tools);
-		if (d == nullptr)
-		{
-			return false;
-		}
-
-		auto* f = FileImageProvider::addFileImage(
-				&m,
-				c->getConfig().getInputFile(),
-				c);
-		if (f == nullptr)
-		{
-			return false;
-		}
-
-		DebugFormatProvider::addDebugFormat(
-				&m,
-				f->getImage(),
-				c->getConfig().getPdbInputFile(),
-				c->getConfig().getImageBase(),
-				d);
-
-		LtiProvider::addLti(
-				&m,
-				c,
-				f->getImage());
-
-		AsmInstruction::clear();
-
-		firstRun = false;
+		return false;
 	}
-	else
+
+	Config* c = nullptr;
+	if (_config)
 	{
-		LOG << "not the first run" << std::endl;
+		c = ConfigProvider::addConfig(&m, *_config);
 	}
+	else if (!ConfigPath.empty())
+	{
+		c = ConfigProvider::addConfigFile(&m, ConfigPath);
+	}
+
+	if (c == nullptr)
+	{
+		return false;
+	}
+
+	auto* f = FileImageProvider::addFileImage(
+			&m,
+			c->getConfig().getInputFile(),
+			c);
+	if (f == nullptr)
+	{
+		return false;
+	}
+
+	// TODO: This happens if config is not initialized via fileinfo etc.
+	// TODO: This is not the right place for this. Refactor the whole thing around this.
+	auto& a = c->getConfig().architecture;
+	if (a.isUnknown())
+	{
+		if (f->getFileFormat()->isLittleEndian())
+		{
+			a.setIsEndianLittle();
+		}
+		else if (f->getFileFormat()->isBigEndian())
+		{
+			a.setIsEndianBig();
+		}
+
+		a.setBitSize(f->getFileFormat()->getWordLength());
+
+		switch (f->getFileFormat()->getTargetArchitecture())
+		{
+			case fileformat::Architecture::X86: a.setIsX86(); break;
+			case fileformat::Architecture::X86_64: a.setIsX86(); break;
+			case fileformat::Architecture::ARM: a.setIsArm(); break;
+			case fileformat::Architecture::POWERPC: a.setIsPpc(); break;
+			case fileformat::Architecture::MIPS: a.setIsMips(); break;
+			default: break; // nothing
+		}
+	}
+	auto& ff = c->getConfig().fileFormat;
+	if (ff.isUnknown())
+	{
+		if (f->getFileFormat()->isElf()) ff.setIsElf();
+		if (f->getFileFormat()->isPe()) ff.setIsPe();
+		if (f->getFileFormat()->isCoff()) ff.setIsCoff();
+		if (f->getFileFormat()->isIntelHex()) ff.setIsIntelHex();
+		if (f->getFileFormat()->isMacho()) ff.setIsMacho();
+		if (f->getFileFormat()->isRawData()) ff.setIsRaw();
+		ff.setFileClassBits(f->getFileFormat()->getWordLength());
+	}
+
+	auto* abi = AbiProvider::addAbi(&m, c);
+	SymbolicTree::setAbi(abi);
+	SymbolicTree::setConfig(c);
+
+	// maybe should be in config::Config
+	auto typeConfig = std::make_shared<ctypesparser::TypeConfig>();
+
+	auto* d = DemanglerProvider::addDemangler(&m, c, typeConfig);
+	if (d == nullptr)
+	{
+		return false;
+	}
+
+	auto* debug = DebugFormatProvider::addDebugFormat(
+			&m,
+			f->getImage(),
+			c->getConfig().getPdbInputFile(),
+			c->getConfig().getImageBase(),
+			d);
+
+	auto* lti = LtiProvider::addLti(&m, c, typeConfig, f->getImage());
+
+	NamesProvider::addNames(&m, c, debug, f, d, lti);
+
+	AsmInstruction::clear();
+
+	firstRun = false;
 
 	return false;
 }

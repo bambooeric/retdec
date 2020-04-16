@@ -9,6 +9,7 @@
 
 #include "retdec/fileformat/types/export_table/export_table.h"
 
+namespace retdec {
 namespace fileinfo {
 
 /**
@@ -17,14 +18,14 @@ namespace fileinfo {
 class ExportTable
 {
 	private:
-		const retdec::fileformat::ExportTable *table;
+		const retdec::fileformat::ExportTable *table = nullptr;
 	public:
-		ExportTable();
-		~ExportTable();
-
 		/// @name Getters
 		/// @{
 		std::size_t getNumberOfExports() const;
+		std::string getExphashCrc32() const;
+		std::string getExphashMd5() const;
+		std::string getExphashSha256() const;
 		std::string getExportName(std::size_t position) const;
 		std::string getExportAddressStr(std::size_t position, std::ios_base &(* format)(std::ios_base &)) const;
 		std::string getExportOrdinalNumberStr(std::size_t position, std::ios_base &(* format)(std::ios_base &)) const;
@@ -42,5 +43,6 @@ class ExportTable
 };
 
 } // namespace fileinfo
+} // namespace retdec
 
 #endif

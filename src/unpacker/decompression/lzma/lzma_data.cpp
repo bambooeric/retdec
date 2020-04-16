@@ -4,7 +4,6 @@
  * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
 
-
 #include <limits>
 
 #include "retdec/unpacker/decompression/lzma/lzma_data.h"
@@ -22,13 +21,6 @@ namespace unpacker {
  */
 LzmaData::LzmaData(const DynamicBuffer& buffer, uint8_t pb, uint8_t lp, uint8_t lc) : CompressedData(buffer),
 		_readPos(0), _pb(pb), _lp(lp), _lc(lc), _rangeDecoder()
-{
-}
-
-/**
- * Destructor.
- */
-LzmaData::~LzmaData()
 {
 }
 
@@ -419,7 +411,6 @@ bool LzmaData::decodeDirectBits(uint32_t count, uint32_t initValue, uint32_t& re
 	ret = value;
 	return true;
 }
-
 
 bool LzmaData::checkProperties()
 {

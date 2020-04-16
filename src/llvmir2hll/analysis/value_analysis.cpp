@@ -94,21 +94,6 @@ ValueData::ValueData(): dirReadVars(), dirWrittenVars(), dirAllVars(),
 	containsArrayAccesses(false), containsStructAccesses(false) {}
 
 /**
-* @brief Constructs a new ValueData object from @a other.
-*/
-ValueData::ValueData(const ValueData &other) = default;
-
-/**
-* @brief Destructs the object.
-*/
-ValueData::~ValueData() {}
-
-/**
-* @brief Assigns @a other to the current object.
-*/
-ValueData &ValueData::operator=(const ValueData &other) = default;
-
-/**
 * @brief Returns @c true if the current object is equal to @a other, @c false
 *        otherwise.
 */
@@ -118,11 +103,11 @@ bool ValueData::operator==(const ValueData &other) const {
 		dirAllVars == other.dirAllVars &&
 		dirNumOfVarUses == other.dirNumOfVarUses &&
 		mayBeReadVars == other.mayBeReadVars &&
-		mayBeWrittenVars == mayBeWrittenVars &&
-		mayBeAccessedVars == mayBeAccessedVars &&
+		mayBeWrittenVars == other.mayBeWrittenVars &&
+		mayBeAccessedVars == other.mayBeAccessedVars &&
 		mustBeReadVars == other.mustBeReadVars &&
-		mustBeWrittenVars == mustBeWrittenVars &&
-		mustBeAccessedVars == mustBeAccessedVars &&
+		mustBeWrittenVars == other.mustBeWrittenVars &&
+		mustBeAccessedVars == other.mustBeAccessedVars &&
 		calls == other.calls &&
 		addressTakenVars == other.addressTakenVars &&
 		containsDerefs == other.containsDerefs &&
@@ -576,11 +561,6 @@ ValueAnalysis::ValueAnalysis(ShPtr<AliasAnalysis> aliasAnalysis,
 	OrderedAllVisitor(false, false), Caching(enableCaching),
 	aliasAnalysis(aliasAnalysis), valueData(), writing(false),
 	removingFromCache(false) {}
-
-/**
-* @brief Destructs the visitor.
-*/
-ValueAnalysis::~ValueAnalysis() {}
 
 /**
 * @brief Returns information about the given value.

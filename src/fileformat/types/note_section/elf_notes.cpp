@@ -1,5 +1,5 @@
 /**
- * @file src/fileformat/types/note_section/elf_note.cpp
+ * @file src/fileformat/types/note_section/elf_notes.cpp
  * @brief Class for ELF note segment.
  * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
@@ -23,13 +23,6 @@ bool ElfNoteEntry::isEmptyNote() const
  * @param assocSecSeg pointer to associated section or segment
  */
 ElfNoteSecSeg::ElfNoteSecSeg(const SecSeg* assocSecSeg) : secSeg(assocSecSeg)
-{
-}
-
-/**
- * Destructor
- */
-ElfNoteSecSeg::~ElfNoteSecSeg()
 {
 }
 
@@ -132,7 +125,6 @@ bool ElfNoteSecSeg::isEmpty() const
 {
 	return notes.empty();
 }
-
 
 } // namespace fileformat
 } // namespace retdec

@@ -22,24 +22,6 @@ namespace retdec {
 namespace fileformat {
 
 /**
- * Constructor
- */
-SecSeg::SecSeg() : type(Type::UNDEFINED_SEC_SEG), index(0), offset(0), fileSize(0),
-	address(0), memorySize(0), entrySize(0), memorySizeIsValid(false),
-	entrySizeIsValid(false), isInMemory(false), loaded(false)
-{
-
-}
-
-/**
- * Destructor (default implementation)
- */
-SecSeg::~SecSeg()
-{
-
-}
-
-/**
  * Compute all supported hashes
  */
 void SecSeg::computeHashes()
@@ -286,7 +268,7 @@ unsigned long long SecSeg::getOffset() const
 unsigned long long SecSeg::getEndOffset() const
 {
 	const auto size = getSizeInFile();
-	return size ? getOffset() + size - 1 : getOffset();
+	return size ? getOffset() + size : getOffset() + 1;
 }
 
 /**
@@ -328,7 +310,7 @@ unsigned long long SecSeg::getEndAddress() const
 		size = getSizeInFile();
 	}
 
-	return size ? getAddress() + size - 1 : getAddress();
+	return size ? getAddress() + size : getAddress() + 1;
 }
 
 /**
@@ -372,6 +354,21 @@ bool SecSeg::getSizeOfOneEntry(unsigned long long &sEntrySize) const
 bool SecSeg::getMemory() const
 {
 	return isInMemory;
+}
+
+/**
+ * Get entropy of section data
+ * @param res Variable to store result to
+ * @return @c true if entropy is valid, otherwise @c false
+ */
+bool SecSeg::getEntropy(double &res) const
+{
+	if (!isEntropyValid)
+	{
+		return false;
+	}
+	res = entropy;
+	return true;
 }
 
 /**
@@ -512,7 +509,6 @@ void SecSeg::setSizeOfOneEntry(unsigned long long sEntrySize)
 	entrySizeIsValid = true;
 }
 
-
 /**
  * Set @c true if the section or segment will appear in the memory image of a process,
  *    @c false otherwise
@@ -520,6 +516,27 @@ void SecSeg::setSizeOfOneEntry(unsigned long long sEntrySize)
 void SecSeg::setMemory(bool sMemory)
 {
 	isInMemory = sMemory;
+}
+
+/**
+ * Compute entropy of section data in <0,1>
+ */
+void SecSeg::computeEntropy()
+{
+	if (!loaded)
+	{
+		return;
+	}
+
+	auto data = reinterpret_cast<const uint8_t *>(bytes.data());
+	auto size = bytes.size();
+	if (!data || size == 0)
+	{
+		return;
+	}
+
+	entropy = computeDataEntropy(data, size);
+	isEntropyValid = true;
 }
 
 /**
@@ -683,7 +700,7 @@ bool SecSeg::hasEmptyName() const
  */
 bool SecSeg::belong(unsigned long long sAddress) const
 {
-	return sAddress >= getAddress() && sAddress <= getEndAddress();
+	return sAddress >= getAddress() && sAddress < getEndAddress();
 }
 
 /**

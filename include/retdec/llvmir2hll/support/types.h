@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "retdec/llvmir2hll/support/smart_ptr.h"
+#include "retdec/common/address.h"
 
 namespace retdec {
 namespace llvmir2hll {
@@ -31,8 +32,11 @@ class Value;
 class VarDefStmt;
 class Variable;
 
+/// Address.
+using Address = retdec::common::Address;
+
 /// Address range.
-using AddressRange = std::pair<std::uint64_t, std::uint64_t>;
+using AddressRange = retdec::common::AddressRange;
 
 /// No address range.
 extern const AddressRange NO_ADDRESS_RANGE;
@@ -73,13 +77,11 @@ using CallSet = std::set<ShPtr<CallExpr>>;
 /// Set of functions.
 using FuncSet = std::set<ShPtr<Function>>;
 
-
 /// Unordered set of statements.
 using StmtUSet = std::unordered_set<ShPtr<Statement>>;
 
 /// Unordered set of types.
 using TypeUSet = std::unordered_set<ShPtr<Type>>;
-
 
 /// Vector of strings.
 using StringVector = std::vector<std::string>;
@@ -108,13 +110,11 @@ using GlobalVarDefVector = std::vector<ShPtr<GlobalVarDef>>;
 /// Vector of structured types.
 using StructTypeVector = std::vector<ShPtr<StructType>>;
 
-
 /// Variable with its initializer.
 using VarInitPair = std::pair<ShPtr<Variable>, ShPtr<Expression>>;
 
 /// List of variables with their initializers.
 using VarInitPairVector = std::vector<VarInitPair>;
-
 
 /// Mapping of a string into a string.
 using StringStringMap = std::map<std::string, std::string>;
@@ -136,7 +136,6 @@ using IntStringMap = std::map<std::int64_t, std::string>;
 
 /// Mapping of a variable into a set of variables.
 using VarVarSetMap = std::map<ShPtr<Variable>, VarSet>;
-
 
 /// Unordered mapping of a string into a string.
 using StringStringUMap = std::unordered_map<std::string, std::string>;

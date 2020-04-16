@@ -1,7 +1,7 @@
 /**
  * @file src/unpackertool/plugins/upx/upx_stub_signatures.h
  * @brief UPX stub signatures declarations.
- * @copyright AVG Technologies s.r.o, All Rights Reserve
+ * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
 
 #ifndef UNPACKERTOOL_PLUGINS_UPX_UPX_STUB_SIGNATURES_H
@@ -11,6 +11,8 @@
 #include "retdec/loader/loader.h"
 #include "unpackertool/plugins/upx/upx_stub.h"
 #include "retdec/unpacker/signature.h"
+
+using namespace retdec::utils;
 
 namespace retdec {
 namespace unpackertool {
@@ -52,10 +54,9 @@ class UpxStubSignatures
 public:
 	UpxStubSignatures() = delete;
 	UpxStubSignatures(const UpxStubSignatures&) = delete;
-	~UpxStubSignatures();
 
-	static const UpxStubData* matchSignatures(retdec::loader::Image* file, retdec::unpacker::DynamicBuffer& captureData);
-	static const UpxStubData* matchSignatures(const retdec::unpacker::DynamicBuffer& data, retdec::unpacker::DynamicBuffer& captureData,
+	static const UpxStubData* matchSignatures(retdec::loader::Image* file, DynamicBuffer& captureData);
+	static const UpxStubData* matchSignatures(const DynamicBuffer& data, DynamicBuffer& captureData,
 			retdec::fileformat::Architecture architecture = retdec::fileformat::Architecture::UNKNOWN, retdec::fileformat::Format format = retdec::fileformat::Format::UNKNOWN);
 
 private:

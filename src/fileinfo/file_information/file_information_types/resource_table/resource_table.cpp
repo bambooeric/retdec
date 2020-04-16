@@ -5,24 +5,10 @@
  */
 
 #include "fileinfo/file_information/file_information_types/resource_table/resource_table.h"
+#include "fileinfo/file_information/file_information_types/type_conversions.h"
 
+namespace retdec {
 namespace fileinfo {
-
-/**
- * Constructor
- */
-ResourceTable::ResourceTable()
-{
-
-}
-
-/**
- * Destructor
- */
-ResourceTable::~ResourceTable()
-{
-
-}
 
 /**
  * Get number of resources in table
@@ -30,7 +16,25 @@ ResourceTable::~ResourceTable()
  */
 std::size_t ResourceTable::getNumberOfResources() const
 {
-	return table.size();
+	return table ? table->getNumberOfResources() : 0;
+}
+
+/**
+ * Get number of supported languages
+ * @return Number of supported languages
+ */
+std::size_t ResourceTable::getNumberOfLanguages() const
+{
+	return table ? table->getNumberOfLanguages() : 0;
+}
+
+/**
+ * Get number of strings
+ * @return Number of strings
+ */
+std::size_t ResourceTable::getNumberOfStrings() const
+{
+	return table ? table->getNumberOfStrings() : 0;
 }
 
 /**
@@ -40,7 +44,8 @@ std::size_t ResourceTable::getNumberOfResources() const
  */
 std::string ResourceTable::getResourceCrc32(std::size_t index) const
 {
-	return table[index].getCrc32();
+	const auto *record = table ? table->getResource(index) : nullptr;
+	return record ? record->getCrc32() : "";
 }
 
 /**
@@ -50,7 +55,8 @@ std::string ResourceTable::getResourceCrc32(std::size_t index) const
  */
 std::string ResourceTable::getResourceMd5(std::size_t index) const
 {
-	return table[index].getMd5();
+	const auto *record = table ? table->getResource(index) : nullptr;
+	return record ? record->getMd5() : "";
 }
 
 /**
@@ -60,7 +66,54 @@ std::string ResourceTable::getResourceMd5(std::size_t index) const
  */
 std::string ResourceTable::getResourceSha256(std::size_t index) const
 {
-	return table[index].getSha256();
+	const auto *record = table ? table->getResource(index) : nullptr;
+	return record ? record->getSha256() : "";
+}
+
+/**
+ * Get iconhash as CRC32
+ * @return Iconhash as CRC32
+ */
+std::string ResourceTable::getResourceIconhashCrc32() const
+{
+	return table ? table->getResourceIconhashCrc32() : "";
+}
+
+/**
+ * Get iconhash as MD5
+ * @return Iconhash as MD5
+ */
+std::string ResourceTable::getResourceIconhashMd5() const
+{
+	return table ? table->getResourceIconhashMd5() : "";
+}
+
+/**
+ * Get iconhash as SHA256
+ * @return Iconhash as SHA256
+ */
+std::string ResourceTable::getResourceIconhashSha256() const
+{
+	return table ? table->getResourceIconhashSha256() : "";
+}
+
+/**
+ * Get icon perceptual hash as AvgHash
+ * @return Icon perceptual hash as AvgHash
+ */
+std::string ResourceTable::getResourceIconPerceptualAvgHash() const
+{
+	return table ? table->getResourceIconPerceptualAvgHash() : "";
+}
+
+/**
+ * Get resource
+ * @param position Index of selected resource from table (indexed from 0)
+ * @return Resource
+ */
+const retdec::fileformat::Resource* ResourceTable::getResource(std::size_t position) const
+{
+	return table ? table->getResource(position) : nullptr;
 }
 
 /**
@@ -70,7 +123,8 @@ std::string ResourceTable::getResourceSha256(std::size_t index) const
  */
 std::string ResourceTable::getResourceName(std::size_t index) const
 {
-	return table[index].getName();
+	const auto *record = table ? table->getResource(index) : nullptr;
+	return record ? record->getName() : "";
 }
 
 /**
@@ -80,7 +134,8 @@ std::string ResourceTable::getResourceName(std::size_t index) const
  */
 std::string ResourceTable::getResourceType(std::size_t index) const
 {
-	return table[index].getType();
+	const auto *record = table ? table->getResource(index) : nullptr;
+	return record ? record->getType() : "";
 }
 
 /**
@@ -90,7 +145,52 @@ std::string ResourceTable::getResourceType(std::size_t index) const
  */
 std::string ResourceTable::getResourceLanguage(std::size_t index) const
 {
-	return table[index].getLanguage();
+	const auto *record = table ? table->getResource(index) : nullptr;
+	return record ? record->getLanguage() : "";
+}
+
+/**
+ * Get LCID of supported language
+ * @param index Index of selected supported language (indexed from 0)
+ * @return LCID of supported language
+ */
+std::string ResourceTable::getLanguageLcid(std::size_t index) const
+{
+	const auto *record = table ? table->getLanguage(index) : nullptr;
+	return record ? record->first : "";
+}
+
+/**
+ * Get code page of supported language
+ * @param index Index of selected code page (indexed from 0)
+ * @return Code page of supported language
+ */
+std::string ResourceTable::getLanguageCodePage(std::size_t index) const
+{
+	const auto *record = table ? table->getLanguage(index) : nullptr;
+	return record ? record->second : "";
+}
+
+/**
+ * Get name of selected string
+ * @param index Index of selected string (indexed from 0)
+ * @return Name of string
+ */
+std::string ResourceTable::getStringName(std::size_t index) const
+{
+	const auto *record = table ? table->getString(index) : nullptr;
+	return record ? record->first : "";
+}
+
+/**
+ * Get value of selected string
+ * @param index Index of selected string (indexed from 0)
+ * @return Value of string
+ */
+std::string ResourceTable::getStringValue(std::size_t index) const
+{
+	const auto *record = table ? table->getString(index) : nullptr;
+	return record ? record->second : "";
 }
 
 /**
@@ -101,7 +201,15 @@ std::string ResourceTable::getResourceLanguage(std::size_t index) const
  */
 std::string ResourceTable::getResourceNameIdStr(std::size_t index, std::ios_base &(* format)(std::ios_base &)) const
 {
-	return table[index].getNameIdStr(format);
+	std::size_t id;
+	const auto *record = table ? table->getResource(index) : nullptr;
+
+	if (!record || !record->getNameId(id))
+	{
+		return "";
+	}
+
+	return getNumberAsString(id, format);
 }
 
 /**
@@ -112,7 +220,15 @@ std::string ResourceTable::getResourceNameIdStr(std::size_t index, std::ios_base
  */
 std::string ResourceTable::getResourceTypeIdStr(std::size_t index, std::ios_base &(* format)(std::ios_base &)) const
 {
-	return table[index].getTypeIdStr(format);
+	std::size_t type;
+	const auto *record = table ? table->getResource(index) : nullptr;
+
+	if (!record || !record->getTypeId(type))
+	{
+		return "";
+	}
+
+	return getNumberAsString(type, format);
 }
 
 /**
@@ -123,7 +239,15 @@ std::string ResourceTable::getResourceTypeIdStr(std::size_t index, std::ios_base
  */
 std::string ResourceTable::getResourceLanguageIdStr(std::size_t index, std::ios_base &(* format)(std::ios_base &)) const
 {
-	return table[index].getLanguageIdStr(format);
+	std::size_t language;
+	const auto *record = table ? table->getResource(index) : nullptr;
+
+	if (!record || !record->getLanguageId(language))
+	{
+		return "";
+	}
+
+	return getNumberAsString(language, format);
 }
 
 /**
@@ -134,7 +258,15 @@ std::string ResourceTable::getResourceLanguageIdStr(std::size_t index, std::ios_
  */
 std::string ResourceTable::getResourceSublanguageIdStr(std::size_t index, std::ios_base &(* format)(std::ios_base &)) const
 {
-	return table[index].getSublanguageIdStr(format);
+	std::size_t sublanguage;
+	const auto *record = table ? table->getResource(index) : nullptr;
+
+	if (!record || !record->getSublanguageId(sublanguage))
+	{
+		return "";
+	}
+
+	return getNumberAsString(sublanguage, format);
 }
 
 /**
@@ -145,7 +277,8 @@ std::string ResourceTable::getResourceSublanguageIdStr(std::size_t index, std::i
  */
 std::string ResourceTable::getResourceOffsetStr(std::size_t index, std::ios_base &(* format)(std::ios_base &)) const
 {
-	return table[index].getOffsetStr(format);
+	const auto *record = table ? table->getResource(index) : nullptr;
+	return record ? getNumberAsString(record->getOffset(), format) : "";
 }
 
 /**
@@ -156,24 +289,27 @@ std::string ResourceTable::getResourceOffsetStr(std::size_t index, std::ios_base
  */
 std::string ResourceTable::getResourceSizeStr(std::size_t index, std::ios_base &(* format)(std::ios_base &)) const
 {
-	return table[index].getSizeStr(format);
+	const auto *record = table ? table->getResource(index) : nullptr;
+	return record ? getNumberAsString(record->getSizeInFile(), format) : "";
 }
 
 /**
- * Add resource to the table
- * @param resource Resource to add
+ * Set resource table data
+ * @param resourceTable Instance of class with original information about resource table
  */
-void ResourceTable::addResource(Resource &resource)
+void ResourceTable::setTable(const retdec::fileformat::ResourceTable *resourceTable)
 {
-	table.push_back(resource);
+	table = resourceTable;
 }
 
 /**
- * Delete all resources from table
+ * Find out if there are any resources
+ * @return @c true if there are some resources, @c false otherwise
  */
-void ResourceTable::clearResources()
+bool ResourceTable::hasRecords() const
 {
-	table.clear();
+	return table ? table->hasResources() : false;
 }
 
 } // namespace fileinfo
+} // namespace retdec

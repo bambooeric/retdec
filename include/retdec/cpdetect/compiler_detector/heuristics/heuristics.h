@@ -1,5 +1,5 @@
 /**
- * @file include/retdec/cpdetec/compiler_detector/heuristics/heuristics.h
+ * @file include/retdec/cpdetect/compiler_detector/heuristics/heuristics.h
  * @brief Class for heuristics detection.
  * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
@@ -74,7 +74,6 @@ class Heuristics
 		 */
 		bool priorityLanguageIsSet = false;
 
-
 		/// @name Auxiliary methods
 		/// @{
 		std::string getUpxVersion();
@@ -135,7 +134,7 @@ class Heuristics
 		Heuristics(
 				retdec::fileformat::FileFormat &parser, Search &searcher,
 				ToolInformation &toolInfo);
-		virtual ~Heuristics();
+		virtual ~Heuristics() = default;
 
 		/// @name Heuristics methods
 		/// @{

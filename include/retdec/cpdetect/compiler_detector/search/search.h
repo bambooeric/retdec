@@ -1,5 +1,5 @@
 /**
- * @file include/retdec/cpdetec/compiler_detector/search/search.h
+ * @file include/retdec/cpdetect/compiler_detector/search/search.h
  * @brief Class for search in file.
  * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
@@ -29,7 +29,6 @@ class Search
 				std::size_t bytesAfter; ///< number of bytes after slash for read
 			public:
 				RelativeJump(std::string sSlash, std::size_t sBytesAfter);
-				~RelativeJump();
 
 				/// @name Jump getters
 				/// @{
@@ -55,7 +54,6 @@ class Search
 		/// @}
 	public:
 		Search(retdec::fileformat::FileFormat &fileParser);
-		~Search();
 
 		/// @name Status methods
 		/// @{

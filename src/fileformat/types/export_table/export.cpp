@@ -10,22 +10,6 @@ namespace retdec {
 namespace fileformat {
 
 /**
- * Constructor
- */
-Export::Export() : address(0), ordinalNumber(0), ordinalNumberIsValid(false)
-{
-
-}
-
-/**
- * Destructor
- */
-Export::~Export()
-{
-
-}
-
-/**
  * Get export name
  * @return Export name
  */
@@ -86,6 +70,16 @@ void Export::setOrdinalNumber(unsigned long long exportOrdinalNumber)
 {
 	ordinalNumber = exportOrdinalNumber;
 	ordinalNumberIsValid = true;
+}
+
+/**
+ * Virtual method which indicates whether export should be used
+ * for calculating exphash.
+ * @return `true` if should be used, otherwise `false`.
+ */
+bool Export::isUsedForExphash() const
+{
+	return true;
 }
 
 /**

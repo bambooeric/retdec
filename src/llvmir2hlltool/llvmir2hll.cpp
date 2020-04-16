@@ -36,7 +36,6 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/ToolOutputFile.h>
 #include <llvm/Target/TargetMachine.h>
-#include <llvm/Target/TargetSubtargetInfo.h>
 
 #include "retdec/llvmir2hll/analysis/alias_analysis/alias_analysis.h"
 #include "retdec/llvmir2hll/analysis/alias_analysis/alias_analysis_factory.h"
@@ -57,7 +56,6 @@
 #include "retdec/llvmir2hll/llvm/llvm_debug_info_obtainer.h"
 #include "retdec/llvmir2hll/llvm/llvm_intrinsic_converter.h"
 #include "retdec/llvmir2hll/llvm/llvmir2bir_converter.h"
-#include "retdec/llvmir2hll/llvm/llvmir2bir_converter_factory.h"
 #include "retdec/llvmir2hll/obtainer/call_info_obtainer.h"
 #include "retdec/llvmir2hll/obtainer/call_info_obtainer_factory.h"
 #include "retdec/llvmir2hll/optimizer/optimizer_manager.h"
@@ -74,7 +72,6 @@
 #include "retdec/llvmir2hll/support/funcs_with_prefix_remover.h"
 #include "retdec/llvmir2hll/support/library_funcs_remover.h"
 #include "retdec/llvmir2hll/support/unreachable_code_in_cfg_remover.h"
-#include "retdec/llvmir2hll/support/unreachable_funcs_remover.h"
 #include "retdec/llvmir2hll/utils/ir.h"
 #include "retdec/llvmir2hll/utils/string.h"
 #include "retdec/llvmir2hll/validator/validator.h"
@@ -108,6 +105,10 @@ namespace {
 cl::opt<std::string> TargetHLL("target-hll",
 	cl::desc("Name of the target HLL (set to 'help' to list all the supported HLLs)."),
 	cl::init("!bad!"));
+
+cl::opt<std::string> OutputFormat("output-format",
+	cl::desc("Output format."),
+	cl::init("plain"));
 
 // We cannot use just -debug because it has been already registered :(.
 cl::opt<bool> Debug("enable-debug",
@@ -156,10 +157,6 @@ cl::opt<bool> KeepAllBrackets("keep-all-brackets",
 	cl::desc("All brackets in the generated code will be kept."),
 	cl::init(false));
 
-cl::opt<bool> KeepUnreachableFuncs("keep-unreachable-funcs",
-	cl::desc("Functions that are unreachable from the main function will be kept, not removed."),
-	cl::init(false));
-
 cl::opt<bool> KeepLibraryFunctions("keep-library-funcs",
 	cl::desc("Functions from standard libraries will be kept, not turned into declarations."),
 	cl::init(false));
@@ -200,11 +197,6 @@ cl::opt<std::string> VarRenamer("var-renamer",
 	cl::desc("Name of the used renamer of variable names "
 		"(the default is 'readable'; set to 'help' to list all the supported renamers)."),
 	cl::init("readable"));
-
-cl::opt<std::string> LLVMIR2BIRConverter("llvmir2bir-converter",
-	cl::desc("Name of the used convereter of LLVM IR to BIR "
-		"(the default is 'orig'; set to 'help' to list all the supported renamers)."),
-	cl::init("orig"));
 
 cl::opt<bool> EmitCFGs("emit-cfgs",
 	cl::desc("Enables the emission of control-flow graphs (CFGs) for each "
@@ -329,7 +321,7 @@ class Decompiler: public ModulePass {
 public:
 	explicit Decompiler(raw_pwrite_stream &out);
 
-	virtual const char *getPassName() const override { return "Decompiler"; }
+	virtual llvm::StringRef getPassName() const override { return "Decompiler"; }
 	virtual bool runOnModule(Module &m) override;
 
 public:
@@ -350,11 +342,10 @@ private:
 	void createSemanticsFromLLVMIR();
 	bool loadConfig();
 	void saveConfig();
-	void convertLLVMIRToBIR();
+	bool convertLLVMIRToBIR();
 	void removeLibraryFuncs();
 	void removeCodeUnreachableInCFG();
 	void removeFuncsPrefixedWith(const retdec::llvmir2hll::StringSet &prefixes);
-	void removeUnreachableFuncs();
 	void fixSignedUnsignedTypes();
 	void convertLLVMIntrinsicFunctions();
 	void obtainDebugInfo();
@@ -377,9 +368,6 @@ private:
 		const retdec::llvmir2hll::StringVector &pfsIds);
 	ShPtr<retdec::llvmir2hll::PatternFinderRunner> instantiatePatternFinderRunner() const;
 	retdec::llvmir2hll::StringSet getPrefixesOfFuncsToBeRemoved() const;
-
-	bool unreachableFuncsShouldBeRemoved() const;
-	bool unreachableFuncsWereAlreadyRemoved() const;
 
 private:
 	/// Output stream into which the generated code will be emitted.
@@ -414,9 +402,6 @@ private:
 
 	/// The used renamer of variables.
 	ShPtr<retdec::llvmir2hll::VarRenamer> varRenamer;
-
-	/// The used convereter of LLVM IR to BIR.
-	ShPtr<retdec::llvmir2hll::LLVMIR2BIRConverter> llvm2BIRConverter;
 };
 
 // Static variables and constants initialization.
@@ -431,7 +416,7 @@ char Decompiler::ID = 0;
 Decompiler::Decompiler(raw_pwrite_stream &out):
 	ModulePass(ID), out(out), llvmModule(nullptr), resModule(), semantics(),
 	hllWriter(), aliasAnalysis(), cio(), arithmExprEvaluator(),
-	varNameGen(), varRenamer(), llvm2BIRConverter() {}
+	varNameGen(), varRenamer() {}
 
 bool Decompiler::runOnModule(Module &m) {
 	if (Debug) retdec::llvm_support::printPhase("initialization");
@@ -442,7 +427,10 @@ bool Decompiler::runOnModule(Module &m) {
 	}
 
 	if (Debug) retdec::llvm_support::printPhase("conversion of LLVM IR into BIR");
-	convertLLVMIRToBIR();
+	decompilationShouldContinue = convertLLVMIRToBIR();
+	if (!decompilationShouldContinue) {
+		return false;
+	}
 
 	retdec::llvmir2hll::StringSet funcPrefixes(getPrefixesOfFuncsToBeRemoved());
 	if (Debug) retdec::llvm_support::printPhase("removing functions prefixed with [" + joinStrings(funcPrefixes) + "]");
@@ -451,11 +439,6 @@ bool Decompiler::runOnModule(Module &m) {
 	if (!KeepLibraryFunctions) {
 		if (Debug) retdec::llvm_support::printPhase("removing functions from standard libraries");
 		removeLibraryFuncs();
-	}
-
-	if (unreachableFuncsShouldBeRemoved()) {
-		if (Debug) retdec::llvm_support::printPhase("removing functions that are not reachable from main");
-		removeUnreachableFuncs();
 	}
 
 	// The following phase needs to be done right after the conversion because
@@ -547,7 +530,7 @@ bool Decompiler::initialize(Module &m) {
 	// a private copy constructor, so it needs to be passed by reference.
 	if (Debug) retdec::llvm_support::printSubPhase("creating the used HLL writer [" + TargetHLL + "]");
 	hllWriter = retdec::llvmir2hll::HLLWriterFactory::getInstance().createObject<
-		raw_pwrite_stream &>(TargetHLL, out);
+		raw_pwrite_stream &>(TargetHLL, out, OutputFormat);
 	if (!hllWriter) {
 		printErrorUnsupportedObject<retdec::llvmir2hll::HLLWriterFactory>(
 			"target HLL", "target HLLs");
@@ -607,19 +590,6 @@ bool Decompiler::initialize(Module &m) {
 			"renamer of variables", "renamers of variables");
 		return false;
 	}
-
-	// Instantiate the requested converter of LLVM IR to BIR and make sure it
-	// exists.
-	if (Debug) retdec::llvm_support::printSubPhase("creating the used LLVM IR to BIR converter [" + LLVMIR2BIRConverter + "]");
-	llvm2BIRConverter = retdec::llvmir2hll::LLVMIR2BIRConverterFactory::getInstance().createObject(
-		LLVMIR2BIRConverter, this);
-	if (!llvm2BIRConverter) {
-		printErrorUnsupportedObject<retdec::llvmir2hll::LLVMIR2BIRConverterFactory>(
-			"converter of LLVM IR to BIR", "converters of LLVM IR to BIR");
-		return false;
-	}
-	// Options
-	llvm2BIRConverter->setOptionStrictFPUSemantics(StrictFPUSemantics);
 
 	createSemantics();
 
@@ -736,12 +706,20 @@ void Decompiler::saveConfig() {
 /**
 * @brief Convert the LLVM IR module into a BIR module using the instantiated
 *        converter.
+* @return @c True if decompilation should continue, @c False if something went
+*         wrong and decompilation should abort.
 */
-void Decompiler::convertLLVMIRToBIR() {
+bool Decompiler::convertLLVMIRToBIR() {
+	auto llvm2BIRConverter = retdec::llvmir2hll::LLVMIR2BIRConverter::create(this);
+	// Options
+	llvm2BIRConverter->setOptionStrictFPUSemantics(StrictFPUSemantics);
+
 	std::string moduleName = ForcedModuleName.empty() ?
 		llvmModule->getModuleIdentifier() : ForcedModuleName;
 	resModule = llvm2BIRConverter->convert(llvmModule, moduleName,
 		semantics, config, Debug);
+
+	return true;
 }
 
 /**
@@ -768,24 +746,6 @@ void Decompiler::removeLibraryFuncs() {
 */
 void Decompiler::removeCodeUnreachableInCFG() {
 	retdec::llvmir2hll::UnreachableCodeInCFGRemover::removeCode(resModule);
-}
-
-/**
-* @brief Removes functions that are not reachable from the main function.
-*/
-void Decompiler::removeUnreachableFuncs() {
-	retdec::llvmir2hll::Maybe<std::string> mainFuncName(semantics->getMainFuncName());
-	retdec::llvmir2hll::FuncVector removedFuncs(retdec::llvmir2hll::UnreachableFuncsRemover::removeFuncs(
-		resModule, mainFuncName ? mainFuncName.get() : "main"));
-
-	if (Debug) {
-		// Emit the functions that were removed. Before that, however, sort
-		// them by name to provide a more deterministic output.
-		sortByName(removedFuncs);
-		for (const auto &func : removedFuncs) {
-			retdec::llvm_support::printSubPhase("removing " + func->getName() + "()");
-		}
-	}
 }
 
 /**
@@ -1057,31 +1017,6 @@ retdec::llvmir2hll::StringSet Decompiler::getPrefixesOfFuncsToBeRemoved() const 
 	return config->getPrefixesOfFuncsToBeRemoved();
 }
 
-/**
-* @brief Should unreachable functions be removed?
-*/
-bool Decompiler::unreachableFuncsShouldBeRemoved() const {
-	if (KeepUnreachableFuncs) {
-		return false;
-	}
-
-	if (unreachableFuncsWereAlreadyRemoved()) {
-		return false;
-	}
-
-	return true;
-}
-
-/**
-* @brief Were unreachable functions already removed?
-*/
-bool Decompiler::unreachableFuncsWereAlreadyRemoved() const {
-	return hasItem(
-		resModule->getOptsRunInFrontend(),
-		"unreachable-funcs"
-	);
-}
-
 //
 // External interface
 //
@@ -1093,16 +1028,22 @@ public:
 		const TargetOptions &options):
 			TargetMachine(t, dataLayoutString, targetTriple, cpu, fs, options) {}
 
-	virtual bool addPassesToEmitFile(PassManagerBase &pm,
-		raw_pwrite_stream &out, CodeGenFileType fileType,
-		bool disableVerify, AnalysisID startBefore, AnalysisID startAfter,
-		AnalysisID stopAfter, MachineFunctionInitializer *mfInitializer) override;
+	virtual bool addPassesToEmitFile(
+			PassManagerBase &pm,
+			raw_pwrite_stream &out,
+			raw_pwrite_stream *,
+			CodeGenFileType fileType,
+			bool disableVerify = true,
+			MachineModuleInfo *MMI = nullptr) override;
 };
 
-bool DecompilerTargetMachine::addPassesToEmitFile(PassManagerBase &pm,
-		raw_pwrite_stream &out, CodeGenFileType fileType,
-		bool disableVerify, AnalysisID startBefore, AnalysisID startAfter,
-		AnalysisID stopAfter, MachineFunctionInitializer *mfInitializer) {
+bool DecompilerTargetMachine::addPassesToEmitFile(
+		PassManagerBase &pm,
+		raw_pwrite_stream &out,
+		raw_pwrite_stream *,
+		CodeGenFileType fileType,
+		bool disableVerify,
+		MachineModuleInfo *MMI) {
 	if (fileType != TargetMachine::CGFT_AssemblyFile) {
 		return true;
 	}
@@ -1125,10 +1066,10 @@ namespace {
 
 Target decompilerTarget;
 
-std::unique_ptr<tool_output_file> getOutputStream() {
+std::unique_ptr<ToolOutputFile> getOutputStream() {
 	// Open the file.
 	std::error_code ec;
-	auto out = std::make_unique<tool_output_file>(OutputFilename, ec, sys::fs::F_None);
+	auto out = std::make_unique<ToolOutputFile>(OutputFilename, ec, sys::fs::F_None);
 	if (ec) {
 		errs() << ec.message() << '\n';
 		return {};
@@ -1176,14 +1117,14 @@ int compileModule(char **argv, LLVMContext &context) {
 		raw_pwrite_stream &os(out->os());
 
 		bool disableVerify = false;
-		AnalysisID startBefore = nullptr;
-		AnalysisID startAfter = nullptr;
-		AnalysisID stopAfter = nullptr;
-		MachineFunctionInitializer *mfInitializer = nullptr;
 
 		// Ask the target to add back-end passes as necessary.
-		if (target->addPassesToEmitFile(pm, os, TargetMachine::CodeGenFileType(),
-				disableVerify, startBefore, startAfter, stopAfter, mfInitializer)) {
+		if (target->addPassesToEmitFile(
+				pm,
+				os,
+				nullptr,
+				TargetMachine::CodeGenFileType(),
+				disableVerify)) {
 			errs() << argv[0] << ": target does not support generation of this"
 					<< " file type!\n";
 			return 1;

@@ -104,7 +104,6 @@ DoNotRenameFunctionsInCalls) {
 	EXPECT_EQ("test", cast<Variable>(testCallExpr->getCalledExpr())->getName());
 }
 
-
 TEST_F(ReadableVarRenamerTests,
 GlobalVariablesGetCorrectlyRenamed) {
 	// Set-up the module.
@@ -569,7 +568,7 @@ void ReadableVarRenamerTests::scenarioVarStoringTheResultOfKnownFuncIsRenamedCor
 	// Setup the renamer.
 	INSTANTIATE_VAR_NAME_GEN_AND_VAR_RENAMER(ReadableVarRenamer, true);
 	ON_CALL(*semanticsMock, getNameOfVarStoringResult(func->getName()))
-		.WillByDefault(Return(Just(std::string(refVarName))));
+		.WillByDefault(Return(std::string(refVarName)));
 
 	// Do the renaming.
 	varRenamer->renameVars(module);
@@ -747,9 +746,9 @@ VariablesPassedAsArgumentsToWellKnownFunctionAreGivenSpecialNames) {
 	// Setup the renamer.
 	INSTANTIATE_VAR_NAME_GEN_AND_VAR_RENAMER(ReadableVarRenamer, true);
 	ON_CALL(*semanticsMock, getNameOfParam("fopen", 1))
-		.WillByDefault(Return(Just("file_path"s)));
+		.WillByDefault(Return("file_path"s));
 	ON_CALL(*semanticsMock, getNameOfParam("fopen", 2))
-		.WillByDefault(Return(Just("mode"s)));
+		.WillByDefault(Return("mode"s));
 
 	// Do the renaming.
 	varRenamer->renameVars(module);
@@ -794,7 +793,7 @@ DereferenceAndAddressAndCastsAreIgnoredWhenNamingArgumentsOfWellKnownFunctions) 
 	// Setup the renamer.
 	INSTANTIATE_VAR_NAME_GEN_AND_VAR_RENAMER(ReadableVarRenamer, true);
 	ON_CALL(*semanticsMock, getNameOfParam("isdigit", 1))
-		.WillByDefault(Return(Just("c"s)));
+		.WillByDefault(Return("c"s));
 
 	// Do the renaming.
 	varRenamer->renameVars(module);
@@ -834,9 +833,9 @@ VariablePassedAsArgumentToWellKnownFunctionIsNotRenamedWhenItIsFunction) {
 	// Setup the renamer.
 	INSTANTIATE_VAR_NAME_GEN_AND_VAR_RENAMER(ReadableVarRenamer, true);
 	ON_CALL(*semanticsMock, getNameOfParam("fopen", 1))
-		.WillByDefault(Return(Nothing<std::string>()));
+		.WillByDefault(Return(std::nullopt));
 	ON_CALL(*semanticsMock, getNameOfParam("fopen", 2))
-		.WillByDefault(Return(Just("mode"s)));
+		.WillByDefault(Return("mode"s));
 
 	// Do the renaming.
 	varRenamer->renameVars(module);
@@ -877,7 +876,7 @@ GlobalVarPassedAsArgOfWellKnownFunctionIsNotGivenSpecialName) {
 	// Setup the renamer.
 	INSTANTIATE_VAR_NAME_GEN_AND_VAR_RENAMER(ReadableVarRenamer, true);
 	ON_CALL(*semanticsMock, getNameOfParam(putcharFunc->getName(), 1))
-		.WillByDefault(Return(Just("c"s)));
+		.WillByDefault(Return("c"s));
 
 	// Do the renaming.
 	varRenamer->renameVars(module);
@@ -915,7 +914,7 @@ VarPassedAsArgOfNotWellKnownFunctionIsNotGivenSpecialName) {
 	// Setup the renamer.
 	INSTANTIATE_VAR_NAME_GEN_AND_VAR_RENAMER(ReadableVarRenamer, true);
 	ON_CALL(*semanticsMock, getNameOfParam("unusual", 1))
-		.WillByDefault(Return(Nothing<std::string>()));
+		.WillByDefault(Return(std::nullopt));
 
 	// Do the renaming.
 	varRenamer->renameVars(module);
@@ -1009,9 +1008,9 @@ VarStoringTheResultOfKnownFuncIsRenamedBeforeVarPassedAsArgument) {
 	std::string expectedVarXNameAfterRename("c");
 	INSTANTIATE_VAR_NAME_GEN_AND_VAR_RENAMER(ReadableVarRenamer, true);
 	ON_CALL(*semanticsMock, getNameOfVarStoringResult(getcharFunc->getName()))
-		.WillByDefault(Return(Just(expectedVarXNameAfterRename)));
+		.WillByDefault(Return(expectedVarXNameAfterRename));
 	ON_CALL(*semanticsMock, getNameOfParam(putcharFunc->getName(), 1))
-		.WillByDefault(Return(Just("d"s)));
+		.WillByDefault(Return("d"s));
 
 	// Do the renaming.
 	varRenamer->renameVars(module);

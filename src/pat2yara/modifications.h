@@ -8,6 +8,7 @@
 #define PAT2YARA_MODIFICATIONS_H
 
 #include <memory>
+#include <string>
 
 // Forward declarations.
 namespace yaramod {
@@ -27,7 +28,7 @@ class RuleRelations;
 constexpr std::size_t YARA_BUF_SIZE = 8000;
 
 std::unique_ptr<yaramod::Rule> createArchitectureRule(
-	const std::unique_ptr<yaramod::Rule> &rule);
+	const yaramod::Rule* rule);
 
 std::unique_ptr<yaramod::Rule> createLogRule(
 	const yaramod::Rule* rule,

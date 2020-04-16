@@ -11,6 +11,7 @@
 
 #include "retdec/fileformat/types/note_section/elf_notes.h"
 
+namespace retdec {
 namespace fileinfo {
 
 /**
@@ -26,7 +27,6 @@ class ElfNoteEntry
 		std::string description;
 };
 
-
 /**
  * Class for ELF notes
  */
@@ -40,9 +40,6 @@ class ElfNotes
 		std::vector<ElfNoteEntry> notes;
 
 	public:
-		ElfNotes();
-		~ElfNotes() = default;
-
 		/// @name Getters
 		/// @{
 		std::string getSectionName() const;
@@ -70,5 +67,6 @@ class ElfNotes
 };
 
 } // namespace fileinfo
+} // namespace retdec
 
 #endif

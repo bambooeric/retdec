@@ -1,13 +1,14 @@
 /**
  * @file src/unpackertool/plugins/upx/upx_stub_signatures.cpp
  * @brief UPX stub signatures definitions.
- * @copyright AVG Technologies s.r.o, All Rights Reserve
+ * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
 
 #include "unpackertool/plugins/upx/upx_stub_signatures.h"
 
 using namespace retdec::fileformat;
 using namespace retdec::loader;
+using namespace retdec::utils;
 using namespace retdec::unpacker;
 
 namespace retdec {

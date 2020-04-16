@@ -1,5 +1,5 @@
 /**
- * @file patterns/patterngenl/pattern_extractor/types/symbol_pattern.cpp
+ * @file src/patterngen/pattern_extractor/types/symbol_pattern.cpp
  * @brief Class representing pattern of one symbol.
  * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
@@ -47,7 +47,6 @@ std::string SymbolPattern::getReferenceString() const
 	return result;
 }
 
-
 /**
  * Get hexadecimal pattern.
  *
@@ -73,7 +72,6 @@ std::shared_ptr<HexString> SymbolPattern::getHexPattern() const
 
 	return patternBuilder.get();
 }
-
 
 /**
  * Create pattern for one byte.
@@ -109,7 +107,6 @@ void SymbolPattern::createBytePattern(
 	}
 }
 
-
 /**
  * Default constructor.
  *
@@ -123,15 +120,6 @@ SymbolPattern::SymbolPattern(
 {
 }
 
-
-/**
- * Default destructor.
- */
-SymbolPattern::~SymbolPattern()
-{
-}
-
-
 /**
  * Set symbol name.
  *
@@ -144,7 +132,6 @@ void SymbolPattern::setName(
 {
 	this->symbolName = symbolName;
 }
-
 
 /**
  * Set rule name.
@@ -160,7 +147,6 @@ void SymbolPattern::setRuleName(
 	this->ruleName = replaceNonalnumCharsWith(ruleName, '_');
 }
 
-
 /**
  * Set source path.
  *
@@ -173,7 +159,6 @@ void SymbolPattern::setSourcePath(
 {
 	metas.emplace_back("source", filePath);
 }
-
 
 /**
  * Set architecture name path.
@@ -188,7 +173,6 @@ void SymbolPattern::setArchitectureName(
 	metas.emplace_back("architecture", archName);
 }
 
-
 /**
  * Load symbol data by move.
  *
@@ -199,7 +183,6 @@ void SymbolPattern::loadData(
 {
 	data = std::move(symbolData);
 }
-
 
 /**
  * Load symbol data.

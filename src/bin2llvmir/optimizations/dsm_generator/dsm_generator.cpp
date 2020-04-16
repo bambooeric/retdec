@@ -14,17 +14,11 @@
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
 
-#include "retdec/llvm-support/utils.h"
-#include "retdec/utils/conversion.h"
-#include "retdec/utils/string.h"
 #include "retdec/utils/time.h"
 #include "retdec/bin2llvmir/optimizations/dsm_generator/dsm_generator.h"
-#include "retdec/bin2llvmir/utils/defs.h"
-#include "retdec/bin2llvmir/utils/type.h"
 
-using namespace retdec::llvm_support;
+using namespace retdec::common;
 using namespace retdec::utils;
-using namespace llvm;
 
 #define debug_enabled false
 
@@ -33,7 +27,7 @@ namespace bin2llvmir {
 
 char DsmGenerator::ID = 0;
 
-static RegisterPass<DsmGenerator> X(
+static llvm::RegisterPass<DsmGenerator> X(
 		"generate-dsm",
 		"Disassembly generation",
 		 false, // Only looks at CFG
@@ -50,41 +44,29 @@ DsmGenerator::DsmGenerator() :
  * @return Always @c false. This pass produces DSM output, it does not modify
  *         module.
  */
-bool DsmGenerator::runOnModule(Module& m)
+bool DsmGenerator::runOnModule(llvm::Module& m)
 {
 	_module = &m;
 	_objf = FileImageProvider::getFileImage(_module);
 	_config = ConfigProvider::getConfig(_module);
 	if (_config == nullptr)
 	{
-		LOG << "[ABORT] config file is not available\n";
 		return false;
 	}
+	_abi = AbiProvider::getAbi(_module);
 
 	// New output name.
 	//
-//	auto out = _config->getConfig().parameters.getOutputFile();
-//	if (out.empty())
-//	{
-//		return false;
-//	}
-//	std::string dsmOut = out + ".dsm";
-//	if (out.find_last_of('.') != std::string::npos)
-//	{
-//		dsmOut = out.substr(0, out.find_last_of('.')) + ".dsm";
-//	}
-
-	// Old output name -- frontend.dsm
-	//
-	auto out = _config->getConfig().parameters.getFrontendOutputFile();
+	auto out = _config->getConfig().parameters.getOutputFile();
 	if (out.empty())
 	{
 		return false;
 	}
 	std::string dsmOut = out + ".dsm";
-	if (out.find_last_of('.') != std::string::npos)
+	auto lastDot = out.find_last_of('.');
+	if (lastDot != std::string::npos)
 	{
-		dsmOut = out.substr(0, out.find_last_of('.')) + ".dsm";
+		dsmOut = out.substr(0, lastDot) + ".dsm";
 	}
 
 	std::ofstream outFile(dsmOut, std::ofstream::out);
@@ -108,25 +90,21 @@ bool DsmGenerator::runOnModuleCustom(
 		llvm::Module& m,
 		Config* c,
 		FileImage* objf,
+		Abi* abi,
 		std::ostream& ret)
 {
 	_module = &m;
 	_config = c;
 	_objf = objf;
+	_abi = abi;
 	run(ret);
 	return false;
 }
 
 void DsmGenerator::run(std::ostream& ret)
 {
-	if (_config == nullptr)
+	if (_config == nullptr || _objf == nullptr || _abi == nullptr)
 	{
-		LOG << "[ABORT] config file is not available\n";
-		return;
-	}
-	if (_objf == nullptr)
-	{
-		LOG << "[ABORT] file image is not available\n";
 		return;
 	}
 
@@ -161,12 +139,11 @@ void DsmGenerator::generateCode(std::ostream& ret)
 	ret << ";;\n";
 	ret << "\n";
 
-	for (auto& p : _config->getConfig().functions)
+	for (auto& f : _config->getConfig().functions)
 	{
-		auto* f = &p.second;
-		if (f->getStart().isDefined())
+		if (f.getStart().isDefined())
 		{
-			_addr2fnc[f->getStart()] = f;
+			_addr2fnc[f.getStart()] = &f;
 		}
 	}
 
@@ -190,19 +167,19 @@ void DsmGenerator::generateCodeSeg(
 	ret << "; section: " << seg->getName() << "\n";
 
 	Address addr;
-	for (addr = seg->getAddress(); addr <= seg->getEndAddress(); )
+	for (addr = seg->getAddress(); addr < seg->getEndAddress(); )
 	{
 		auto fIt = _addr2fnc.find(addr);
 		auto* f = fIt != _addr2fnc.end() ? fIt->second : nullptr;
 		if (f)
 		{
 			generateFunction(f, ret);
-			addr = f->getEnd() > addr ? f->getEnd() + 1 : addr + 1;
+			addr = f->getEnd() > addr ? f->getEnd() : Address(addr + 1);
 			continue;
 		}
 
 		Address nextFncAddr = addr;
-		while (nextFncAddr <= seg->getEndAddress())
+		while (nextFncAddr < seg->getEndAddress())
 		{
 			if (_addr2fnc.count(nextFncAddr))
 			{
@@ -211,7 +188,7 @@ void DsmGenerator::generateCodeSeg(
 			++nextFncAddr;
 		}
 
-		Address last = nextFncAddr-1; // TODO
+		Address last = nextFncAddr;
 		ret << "; data inside code section at "
 				<< addr.toHexPrefixString() << " -- "
 				<< last.toHexPrefixString() << "\n";
@@ -221,7 +198,7 @@ void DsmGenerator::generateCodeSeg(
 }
 
 void DsmGenerator::generateFunction(
-		retdec::config::Function* fnc,
+		const retdec::common::Function* fnc,
 		std::ostream& ret)
 {
 	ret << ";";
@@ -248,7 +225,7 @@ void DsmGenerator::generateFunction(
 			<< fnc->getStart().toHexPrefixString()
 			<< " -- " << fnc->getEnd().toHexPrefixString() << "\n";
 
-	if (!fnc->isUserDefined())
+	if (!fnc->isDecompilerDefined() && !fnc->isUserDefined())
 	{
 		return;
 	}
@@ -267,7 +244,7 @@ void DsmGenerator::generateFunction(
 					<< next.getAddress().toHexPrefixString() << "\n";
 			generateDataRange(ai.getEndAddress(), next.getAddress(), ret);
 		}
-		else if (next.isInvalid() && ai.getEndAddress() < (fnc->getEnd() + 1))
+		else if (next.isInvalid() && ai.getEndAddress() < fnc->getEnd())
 		{
 			Address end = fnc->getEnd() + 1;
 			ret << "; data inside code section at "
@@ -320,7 +297,21 @@ std::string DsmGenerator::processInstructionDsm(AsmInstruction& ai)
 {
 	std::string ret = ai.getDsm();
 
-	if (auto* c = ai.getInstructionFirst<CallInst>())
+	// Ugly and potentially dangerous hack for MIPS.
+	// Because of delay slots, branches are in different (next) instructions.
+	// The problem is, what if there are some calls, branches, that were not
+	// created with delays slots?
+	//
+	AsmInstruction tmpAi = ai;
+	if (_config->getConfig().architecture.isMipsOrPic32())
+	{
+		if (AsmInstruction nextAi = tmpAi.getNext())
+		{
+			tmpAi = nextAi;
+		}
+	}
+
+	if (auto* c = tmpAi.getInstructionFirst<llvm::CallInst>()) // ai
 	{
 		if (auto* f = c->getCalledFunction())
 		{
@@ -331,23 +322,25 @@ std::string DsmGenerator::processInstructionDsm(AsmInstruction& ai)
 			}
 		}
 	}
-	else if (auto* br = ai.getInstructionFirst<BranchInst>())
+	else if (auto* br = tmpAi.getInstructionFirst<llvm::BranchInst>()) // ai
 	{
 		bool ok = true;
 		auto* falseDestUse = br->isConditional() ? br->op_end() - 2 : nullptr;
-		auto* falseDestBb = falseDestUse ? cast<BasicBlock>(falseDestUse->get()) : nullptr;
+		auto* falseDestBb = falseDestUse
+				? llvm::cast<llvm::BasicBlock>(falseDestUse->get())
+				: nullptr;
 		if (falseDestBb)
 		{
 			auto* falseDestI = &falseDestBb->front();
 			AsmInstruction falseDestAi(falseDestI);
-			if (falseDestAi == ai)
+			if (falseDestAi == tmpAi) // ai
 			{
 				ok = false;
 			}
 		}
 
 		auto* trueDestUse = br->op_end() - 1;
-		auto* trueDestBb = cast<BasicBlock>(trueDestUse->get());
+		auto* trueDestBb = llvm::cast<llvm::BasicBlock>(trueDestUse->get());
 		auto* trueDestI = &trueDestBb->front();
 		AsmInstruction trueDestAi(trueDestI);
 
@@ -356,13 +349,13 @@ std::string DsmGenerator::processInstructionDsm(AsmInstruction& ai)
 			ok = false;
 		}
 
-		if (ok && trueDestAi.isValid() && trueDestAi != ai)
+		if (ok && trueDestAi.isValid() && trueDestAi != tmpAi) // ai
 		{
 			auto* trueDestFnc = trueDestI->getFunction();
 			auto addr = _config->getFunctionAddress(trueDestFnc);
 			if (trueDestAi.isValid() && addr.isDefined())
 			{
-				retdec::utils::Address o = trueDestAi.getAddress() - addr;
+				retdec::common::Address o = trueDestAi.getAddress() - addr;
 				ret += " <" + getFunctionName(trueDestFnc) + "+"
 						+ o.toHexPrefixString() + ">";
 			}
@@ -399,7 +392,8 @@ std::string DsmGenerator::processInstructionDsm(AsmInstruction& ai)
 				auto* g = _config->getLlvmGlobalVariable(val);
 				if (cg && g && g->hasInitializer())
 				{
-					if (auto* cda = dyn_cast<ConstantDataArray>(g->getInitializer()))
+					if (auto* cda = llvm::dyn_cast<llvm::ConstantDataArray>(
+							g->getInitializer()))
 					{
 						comment += " ; " + getString(cg, cda);
 						break;
@@ -447,14 +441,14 @@ void DsmGenerator::generateDataSeg(
 }
 
 void DsmGenerator::generateDataRange(
-		retdec::utils::Address start,
-		retdec::utils::Address end,
+		retdec::common::Address start,
+		retdec::common::Address end,
 		std::ostream& ret)
 {
 	auto addr = start;
 	while (addr < end)
 	{
-		ConstantDataArray* init = nullptr;
+		llvm::ConstantDataArray* init = nullptr;
 		std::string val;
 
 		Address gvAddr = addr;
@@ -464,7 +458,8 @@ void DsmGenerator::generateDataRange(
 			auto* g = _config->getLlvmGlobalVariable(gvAddr);
 			if (cg && g && g->hasInitializer())
 			{
-				if ((init = dyn_cast<ConstantDataArray>(g->getInitializer())))
+				if ((init = llvm::dyn_cast<llvm::ConstantDataArray>(
+						g->getInitializer())))
 				{
 					val = getString(cg, init);
 					break;
@@ -481,7 +476,7 @@ void DsmGenerator::generateDataRange(
 				addr += sz;
 			}
 
-			auto sz = getTypeByteSizeInBinary(_module, init->getType());
+			auto sz = _abi->getTypeByteSize(init->getType());
 			generateData(ret, addr, sz, val);
 			addr += sz;
 		}
@@ -495,7 +490,7 @@ void DsmGenerator::generateDataRange(
 
 void DsmGenerator::generateData(
 		std::ostream& ret,
-		retdec::utils::Address start,
+		retdec::common::Address start,
 		std::size_t size,
 		const std::string& objVal)
 {
@@ -634,7 +629,7 @@ std::string DsmGenerator::reduceNegativeNumbers(const std::string& str)
 }
 
 void DsmGenerator::generateAlignedAddress(
-		retdec::utils::Address addr,
+		retdec::common::Address addr,
 		std::ostream& ret)
 {
 	auto as = addr.toHexPrefixString();
@@ -692,7 +687,7 @@ void DsmGenerator::findLongestInstruction()
 }
 
 std::string DsmGenerator::getString(
-		const retdec::config::Object* cgv,
+		const retdec::common::Object* cgv,
 		const llvm::ConstantDataArray* cda)
 {
 	std::string ret;
@@ -712,7 +707,7 @@ std::string DsmGenerator::getString(
 		{
 			str.pop_back();
 		}
-		size_t sz = getTypeBitSizeInBinary(_module, cda->getElementType());
+		size_t sz = _abi->getTypeBitSize(cda->getElementType());
 		ret = "L\"" + asEscapedCString(str, sz) + "\"";
 	}
 
@@ -725,7 +720,7 @@ std::string DsmGenerator::getFunctionName(llvm::Function* f) const
 	return cf ? getFunctionName(cf) : f->getName().str();
 }
 
-std::string DsmGenerator::getFunctionName(retdec::config::Function* f) const
+std::string DsmGenerator::getFunctionName(const retdec::common::Function* f) const
 {
 	auto& rn = f->getRealName();
 	return rn.empty() ? f->getName() : rn;

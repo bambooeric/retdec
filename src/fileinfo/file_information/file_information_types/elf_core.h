@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+namespace retdec {
 namespace fileinfo {
 
 using AuxVectorEntry = std::pair<std::string, std::uint64_t>;
@@ -26,7 +27,6 @@ class FileMapEntry
 		std::string path;
 };
 
-
 /**
  * Class for ELF core files
  */
@@ -37,9 +37,6 @@ class ElfCore
 		std::vector<FileMapEntry> fileMap;
 
 	public:
-		ElfCore();
-		~ElfCore() = default;
-
 		/// @name Queries
 		/// @{
 		bool hasAuxVector() const;
@@ -62,5 +59,6 @@ class ElfCore
 };
 
 } // namespace fileinfo
+} // namespace retdec
 
 #endif

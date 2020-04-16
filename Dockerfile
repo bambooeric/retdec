@@ -11,17 +11,12 @@ RUN apt-get -y update && \
 	git                                                 \
 	perl                                                \
 	python3                                             \
-	bash                                                \
-	coreutils                                           \
-	wget                                                \
-	bc                                                  \
 	doxygen                                             \
 	graphviz                                            \
 	upx                                                 \
-	flex                                                \
-	bison                                               \
+	openssl                                             \
+	libssl-dev                                          \
 	zlib1g-dev                                          \
-	libtinfo-dev                                        \
 	autoconf                                            \
 	automake                                            \
 	pkg-config                                          \
@@ -29,7 +24,7 @@ RUN apt-get -y update && \
 	libtool
 
 USER retdec
-RUN git clone https://github.com/avast-tl/retdec && \
+RUN git clone https://github.com/avast/retdec && \
 	cd retdec && \
 	mkdir build && \
 	cd build && \

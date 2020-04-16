@@ -33,11 +33,6 @@ OneSubOptimizer::OneSubOptimizer(ShPtr<ArithmExprEvaluator>
 		arithmExprEvaluator): SubOptimizer(arithmExprEvaluator) {}
 
 /**
-* @brief Destructor.
-*/
-OneSubOptimizer::~OneSubOptimizer() {}
-
-/**
 * @brief Creates a new OneSubOptimizer.
 *
 * @param[in] arithmExprEvaluator @a The used evaluator of arithmetical
@@ -96,7 +91,6 @@ void OneSubOptimizer::visit(ShPtr<BitXorOpExpr> expr) {
 			return;
 		}
 	}
-
 
 	if (isConstIntOne(expr->getSecondOperand())) {
 		// Optimization like "(a == b) ^ 1" -> optimized to "a != b" or

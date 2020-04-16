@@ -15,6 +15,8 @@ set(DOXYGEN_INTERNAL_DOCS "YES")
 set(DOXYGEN_EXCLUDE_PATTERNS "")
 set(DOXYGEN_EXCLUDE_SYMBOLS "")
 set(DOXYGEN_ENABLED_SECTIONS "internal")
+set(DOXYGEN_INCLUDE_GRAPH "NO")
+set(DOXYGEN_INCLUDED_BY_GRAPH "NO")
 
 # Configuration.
 configure_file("${DOXYGEN_CFG_IN}" "${DOXYGEN_CFG}" @ONLY)
@@ -27,8 +29,22 @@ add_custom_target(doc ALL
 	COMMENT "Generating API documentation with Doxygen" VERBATIM
 )
 
+# Show doxygen log file after the documentation is generated.
+add_custom_command(TARGET doc
+	POST_BUILD
+	COMMAND "${CMAKE_COMMAND}" "-DDOXYGEN_LOG=${DOXYGEN_LOG}" -P "${CMAKE_CURRENT_SOURCE_DIR}/show_doxygen_log.cmake"
+)
+
 # Cleanup.
-set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${DOXYGEN_OUTPUT_DIR}")
+set_directory_properties(
+	PROPERTIES
+	ADDITIONAL_MAKE_CLEAN_FILES "${DOXYGEN_OUTPUT_DIR}"
+)
 
 # Install.
-install(DIRECTORY "${DOXYGEN_OUTPUT_DIR}" DESTINATION share/retdec/doc)
+install(
+	DIRECTORY
+		${DOXYGEN_OUTPUT_DIR}
+	DESTINATION
+		${RETDEC_INSTALL_DOC_DIR}
+)

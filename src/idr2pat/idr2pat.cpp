@@ -95,7 +95,7 @@ void skip(
 /**
  * Get string from relocations.
  *
- * @param relocations vectgor with relocation pairs
+ * @param relocations vector with relocation pairs
  * @return formatted string
  */
 std::string getRelocationsAsString(
@@ -180,9 +180,9 @@ void readFunction(
 		// Read name and check for duplicates.
 		std::string fixName;
 		getString(fixName, inputStream);
-		if (usedNames.find(fixName) == usedNames.end()) {
-			// Create relocation and remember name.
-			usedNames.insert(fixName);
+		// Create relocation and remember name.
+		const auto& [_, inserted] = usedNames.insert(fixName);
+		if (inserted) {
 			relocations.emplace_back(fixOffset, fixName);
 		}
 	}

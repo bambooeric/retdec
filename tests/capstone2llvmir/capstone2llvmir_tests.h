@@ -18,6 +18,7 @@
 
 #include "retdec/capstone2llvmir/capstone2llvmir.h"
 #include "retdec/llvmir-emul/llvmir_emul.h"
+#include "retdec/utils/conversion.h"
 
 /**
  * Print any LLVM object which implements @c print(llvm::raw_string_ostream&)
@@ -216,6 +217,11 @@ class Capstone2LlvmIrTranslatorTests : public ::testing::Test
 			initKeystoneEngine();
 			initCapstone2LlvmIrTranslator(); // Generate environment to module.
 			initLlvmEmulator(); // Loads up the environment for emulation.
+
+			_translator->getCallFunction()->setName("__pseudo_call");
+			_translator->getReturnFunction()->setName("__pseudo_return");
+			_translator->getBranchFunction()->setName("__pseudo_branch");
+			_translator->getCondBranchFunction()->setName("__pseudo_cond_branch");
 		}
 
 	// Implemented here.
@@ -260,11 +266,9 @@ class Capstone2LlvmIrTranslatorTests : public ::testing::Test
 		}
 
 		virtual llvm::Function* translate(
-				const std::string& code,
+				const std::vector<uint8_t> bytes,
 				uint64_t addr = 0)
 		{
-			auto asmBytes = assemble(code, addr);
-
 			// Each translation gets its own function.
 			//
 			auto* f = llvm::Function::Create(
@@ -279,7 +283,7 @@ class Capstone2LlvmIrTranslatorTests : public ::testing::Test
 			auto* ret = irb.CreateRetVoid();
 			irb.SetInsertPoint(ret);
 
-			_translator->translate(asmBytes, addr, irb);
+			_translator->translate(bytes.data(), bytes.size(), addr, irb);
 
 			return f;
 		}
@@ -289,10 +293,40 @@ class Capstone2LlvmIrTranslatorTests : public ::testing::Test
 			return f;
 		}
 
-		virtual llvm::Function* emulate(const std::string& code,
+		/**
+		 * @param textAsm Instruction(s) in textual form (e.g. "add eax, ecx").
+		 *                This is first assembled to binary form and then
+		 *                translated to LLVM IR and emulated.
+		 * @param addr    Address where assembly is to be located.
+		 */
+		virtual llvm::Function* emulate(
+				const std::string& textAsm,
 				uint64_t addr = 0)
 		{
-			auto* f = translate(code, addr);
+			auto bytes = assemble(textAsm, addr);
+			return _emulate(bytes, addr);
+		}
+
+		/**
+		 * @param binaryAsm Instruction(s) in hexadecimal (without prefix)
+		 *                  binary form (e.g. "01 c8").
+		 *                  This is first converted to a true byte array and
+		 *                  then translated to LLVM IR and emulated.
+		 * @param addr      Address where assembly is to be located.
+		 */
+		virtual llvm::Function* emulate_bin(
+				const std::string& binaryAsm,
+				uint64_t addr = 0)
+		{
+			auto bytes = utils::hexStringToBytes(binaryAsm);
+			return _emulate(bytes, addr);
+		}
+
+		virtual llvm::Function* _emulate(
+				const std::vector<uint8_t> bytes,
+				uint64_t addr = 0)
+		{
+			auto* f = translate(bytes, addr);
 			f = modifyTranslationForEmulation(f);
 
 			_emulator->runFunction(f, {});
@@ -606,12 +640,14 @@ class Capstone2LlvmIrTranslatorTests : public ::testing::Test
 								<< "\n" << dumpFunction(_function);
 						break;
 					case StoredValue::eType::DOUBLE:
-						EXPECT_DOUBLE_EQ(val.d, getRegisterValueDouble(reg))
+						// EXPECT_DOUBLE_EQ is too strict.
+						EXPECT_NEAR(val.d, getRegisterValueDouble(reg), 0.001)
 								<< "\nregister = " << _translator->getRegisterName(reg)
 								<< "\n" << dumpFunction(_function);
 						break;
 					case StoredValue::eType::FLOAT:
-						EXPECT_FLOAT_EQ(val.f, getRegisterValueFloat(reg))
+						// EXPECT__FLOAT_EQ is too strict.
+						EXPECT_NEAR(val.f, getRegisterValueFloat(reg), 0.001)
 								<< "\nregister = " << _translator->getRegisterName(reg)
 								<< "\n" << dumpFunction(_function);
 						break;

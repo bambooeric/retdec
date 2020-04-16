@@ -1,7 +1,7 @@
 /**
  * @file src/pdbparser/pdb_symbols.cpp
  * @brief Symbols
- * @copyright AVG Technologies s.r.o, All Rights Reserved
+ * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
 
 #include <cassert>
@@ -134,7 +134,6 @@ bool PDBFunction::parse_symbol(PDBGeneralSymbol *symbol, PDBTypes *types, PDBSym
 
 			if (type_def != nullptr)
 			{
-				assert(type_def->type_class == PDBTYPE_FUNCTION);
 				args_remain = type_def->func_args_count;
 				if (type_def->func_thistype_index)
 					args_remain++;  // This-parameter

@@ -109,7 +109,6 @@ bool LLVMSupport::isInlinableInst(const llvm::Instruction *i) {
 	//         store i32 0, i32* @var, align 4
 	//         ret i32 %result
 
-
 	// Always inline GEP instructions (this fixes several problems with invalid
 	// generated code for structure/array indexing; e.g. when the same index
 	// computed by a GEP instruction is used more than once.
@@ -118,7 +117,7 @@ bool LLVMSupport::isInlinableInst(const llvm::Instruction *i) {
 
 	// Always inline cast instructions (this prevents emission of useless
 	// temporary variables).
-	if (llvm::isa<llvm::BitCastInst>(i))
+	if (llvm::isa<llvm::AddrSpaceCastInst>(i) || llvm::isa<llvm::BitCastInst>(i))
 		return true;
 
 	// Always inline CMP instructions, even if they are shared by multiple
@@ -134,7 +133,7 @@ bool LLVMSupport::isInlinableInst(const llvm::Instruction *i) {
 	// It has to be an expression, and it has to be used exactly once. If it is
 	// dead, we generate it inline where it would go.
 	if (i->getType() == llvm::Type::getVoidTy(i->getContext()) || !i->hasOneUse() ||
-			llvm::isa<llvm::TerminatorInst>(i) || llvm::isa<llvm::CallInst>(i) ||
+			i->isTerminator() || llvm::isa<llvm::CallInst>(i) ||
 			llvm::isa<llvm::PHINode>(i) || llvm::isa<llvm::LoadInst>(i) ||
 			llvm::isa<llvm::VAArgInst>(i) || llvm::isa<llvm::InsertElementInst>(i) ||
 			llvm::isa<llvm::InsertValueInst>(i)) {
@@ -220,7 +219,7 @@ bool LLVMSupport::endsWithRetOrUnreachImpl(llvm::BasicBlock *bb, bool indirect){
 	}
 	endsWithRetOrUnreachBBSet.insert(bb);
 
-	llvm::TerminatorInst *t = bb->getTerminator();
+	llvm::Instruction *t = bb->getTerminator();
 	if (llvm::isa<llvm::ReturnInst>(t) || llvm::isa<llvm::UnreachableInst>(t)) {
 		return true;
 	}
@@ -297,6 +296,25 @@ bool LLVMSupport::isBasicBlockLabel(const std::string &str) {
 	std::string expectedPrefix(LLVMSupport::getBasicBlockLabelPrefix());
 	return startsWith(str, expectedPrefix) && str.size() > expectedPrefix.size() &&
 		hasOnlyHexadecimalDigits(str.substr(expectedPrefix.size()));
+}
+
+/**
+* @brief Get instruction's ASM address from metadata.
+* @return Address, or undefined address if metadata entry is not present.
+*
+* @par Preconditions
+*  - @a i is non-null
+*/
+Address LLVMSupport::getInstAddress(const llvm::Instruction *i) {
+	PRECONDITION_NON_NULL(i);
+
+	if (llvm::MDNode* mdn = i->getMetadata("insn.addr")) {
+		llvm::ConstantInt* CI = llvm::mdconst::dyn_extract<llvm::ConstantInt>(
+			mdn->getOperand(0));
+		return CI->getZExtValue();
+	}
+
+	return Address::Undefined;
 }
 
 } // namespace llvmir2hll

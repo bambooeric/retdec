@@ -85,7 +85,6 @@ struct Options
 		bool isOffset = false;         ///< @c true if user provided offset
 };
 
-
 /**
  * Print error message and return non-zero value.
  * @param message error message
@@ -98,7 +97,6 @@ int printError(
 	return 1;
 }
 
-
 /**
  * Print warning message.
  * @param message warning message
@@ -108,7 +106,6 @@ void printWarning(
 {
 	std::cerr << "Warning: " << message << ".\n";
 }
-
 
 /**
  * Fetch parameter value or die with error message.
@@ -129,7 +126,6 @@ std::string getParamOrDie(std::vector<std::string> &argv, std::size_t &i)
 		exit(1);
 	}
 }
-
 
 /**
  * Process parameters
@@ -268,7 +264,6 @@ bool doParams(
 	return !options.input.empty();
 }
 
-
 /**
  * Get length of shortest string in given vector.
  * @param inputs vector of strings
@@ -297,11 +292,10 @@ std::size_t getShortestLength(
 	return min;
 }
 
-
 /**
  * Creates signature pattern from vector of strings
  * @param contents Vector of bytes from files
- * @param return created signature
+ * @return created signature
  */
 std::string createSignature(const std::vector<std::string> &contents)
 {
@@ -346,7 +340,6 @@ std::string createSignature(const std::vector<std::string> &contents)
 	return pattern;
 }
 
-
 /**
  * Form entry point condition from format.
  * @param format file format
@@ -376,7 +369,6 @@ std::string formatToCondition(
 
 	return formatStr + ".entry_point";
 }
-
 
 /**
  * Create YARA rule from pattern.
@@ -455,7 +447,6 @@ std::string getYaraRule(
 
 	return out.str();
 }
-
 
 int main(int argc, char** argv) {
 
@@ -542,4 +533,3 @@ int main(int argc, char** argv) {
 
 	return 0;
 }
-

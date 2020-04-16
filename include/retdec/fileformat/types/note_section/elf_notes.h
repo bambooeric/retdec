@@ -1,5 +1,5 @@
 /**
- * @file include/retdec/fileformat/types/note_section/elf_note.cpp
+ * @file include/retdec/fileformat/types/note_section/elf_notes.h
  * @brief Class for ELF note section (segment).
  * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
@@ -51,7 +51,6 @@ class ElfNoteSecSeg
 		/// @name  Constructors and destructor
 		/// @{
 		ElfNoteSecSeg(const SecSeg* assocSecSeg);
-		~ElfNoteSecSeg();
 		/// @}
 
 		/// @name Setters
@@ -81,8 +80,6 @@ class ElfNoteSecSeg
 		bool isEmpty() const;
 		/// @}
 };
-
-
 
 } // namespace fileformat
 } // namespace retdec

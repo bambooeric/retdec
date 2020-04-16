@@ -9,6 +9,7 @@
 
 #include "retdec/fileformat/file_format/elf/elf_format.h"
 
+namespace retdec {
 namespace fileinfo {
 
 /**
@@ -18,7 +19,6 @@ class ElfWrapper : public retdec::fileformat::ElfFormat
 {
 	public:
 		ElfWrapper(std::string pathToFile, retdec::fileformat::LoadFlags loadFlags);
-		virtual ~ElfWrapper() override;
 
 		/// @name Detection methods
 		/// @{
@@ -26,10 +26,10 @@ class ElfWrapper : public retdec::fileformat::ElfFormat
 		ELFIO::section* getFileSection(unsigned long long secIndex) const;
 		ELFIO::symbol_section_accessor* getSymbolTable(unsigned long long secIndex) const;
 		ELFIO::relocation_section_accessor* getRelocationTable(unsigned long long secIndex) const;
-		ELFIO::dynamic_section_accessor* getDynamicSection(unsigned long long secIndex) const;
 		/// @}
 };
 
 } // namespace fileinfo
+} // namespace retdec
 
 #endif

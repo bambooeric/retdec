@@ -22,15 +22,15 @@ class DynamicTable
 	private:
 		using dynamicTableIterator = std::vector<DynamicEntry>::const_iterator;
 		std::vector<DynamicEntry> table; ///< all records in table
+		/// Name of the section this table was created from.
+		std::string sectionName;
 	public:
-		DynamicTable();
-		~DynamicTable();
-
 		/// @name Getters
 		/// @{
 		std::size_t getNumberOfRecords() const;
 		const DynamicEntry* getRecord(std::size_t recordIndex) const;
 		const DynamicEntry* getRecordOfType(unsigned long long recordType) const;
+		const std::string& getSectionName() const;
 		/// @}
 
 		/// @name Iterators
@@ -45,6 +45,7 @@ class DynamicTable
 		void addRecord(DynamicEntry &record);
 		bool hasRecords() const;
 		bool hasRecordOfType(unsigned long long recordType) const;
+		void setSectionName(const std::string& name);
 		void dump(std::string &dumpTable) const;
 		/// @}
 };

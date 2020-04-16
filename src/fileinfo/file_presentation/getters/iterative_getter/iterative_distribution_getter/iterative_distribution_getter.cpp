@@ -6,6 +6,7 @@
 
 #include "fileinfo/file_presentation/getters/iterative_getter/iterative_distribution_getter/iterative_distribution_getter.h"
 
+namespace retdec {
 namespace fileinfo {
 
 namespace
@@ -48,14 +49,6 @@ std::string getHeaderAddend(const std::string &elemVal, std::size_t distribution
  * Finally, constructor in subclass must invoke method @a loadRecords.
  */
 IterativeDistributionGetter::IterativeDistributionGetter(FileInformation &fileInfo) : IterativeGetter(fileInfo)
-{
-
-}
-
-/**
- * Destructor
- */
-IterativeDistributionGetter::~IterativeDistributionGetter()
 {
 
 }
@@ -271,9 +264,10 @@ void IterativeDistributionGetter::getHeader(std::size_t structIndex, std::string
 	}
 	const std::size_t basicElemSize = commonHeaderElements.size();
 	const std::size_t flagsSize = distFlags[structIndex].size();
+	auto end = std::min(distribution.size(), std::min(basicElemSize, flagsSize));
 	header.clear();
 
-	for(std::size_t i = 0, e = std::min(basicElemSize, flagsSize); i < e; ++i)
+	for(std::size_t i = 0, e = end; i < e; ++i)
 	{
 		if(distFlags[structIndex][i])
 		{
@@ -363,3 +357,4 @@ bool IterativeDistributionGetter::getRecord(std::size_t structIndex, std::size_t
  */
 
 } // namespace fileinfo
+} // namespace retdec

@@ -2108,7 +2108,6 @@ rule arm_protector {
 		$1 at pe.entry_point
 }
 
-
 rule armadillo_uv {
 	meta:
 		tool = "P"
@@ -4787,16 +4786,28 @@ rule encryptpe_22008618_02 {
 		$1 at pe.entry_point
 }
 
-rule enigma_protector_102 {
+rule enigma_0x {
 	meta:
 		tool = "P"
-		name = "Enigma protector"
+		name = "Enigma"
+		version = "0.x beta"
+		pattern = "60E824000000??????EB02????8B44240C8380B80000000331C0C383C008EB02????89C461EB2E??????83042403EB01??31C0EB01??64FF30EB01??648920EB02????8900"
+	strings:
+		$1 = { 60 E8 24 00 00 00 ?? ?? ?? EB 02 ?? ?? 8B 44 24 0C 83 80 B8 00 00 00 03 31 C0 C3 83 C0 08 EB 02 ?? ?? 89 C4 61 EB 2E ?? ?? ?? 83 04 24 03 EB 01 ?? 31 C0 EB 01 ?? 64 FF 30 EB 01 ?? 64 89 20 EB 02 ?? ?? 89 00 }
+	condition:
+		@1 < pe.overlay.offset or $1
+}
+
+rule enigma_102 {
+	meta:
+		tool = "P"
+		name = "Enigma"
 		version = "1.02"
 		pattern = "60E8000000005D83ED0681ED??????????????????????????????????????????????????????????????????????E8010000009A83C404EB02FF3560E8240000000000FFEB02CD208B44240C8380B80000000331C0C383C008EB02FF1589C461EB2EEAEB2B83042403EB010031C0EB018564FF30EB0183648920EB02CD2089009A648F0500000000EB02C1905861EB013EBE01000000C1E60283EC0487DE891C24"
 	strings:
 		$1 = { 60 E8 00 00 00 00 5D 83 ED 06 81 ED ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? E8 01 00 00 00 9A 83 C4 04 EB 02 FF 35 60 E8 24 00 00 00 00 00 FF EB 02 CD 20 8B 44 24 0C 83 80 B8 00 00 00 03 31 C0 C3 83 C0 08 EB 02 FF 15 89 C4 61 EB 2E EA EB 2B 83 04 24 03 EB 01 00 31 C0 EB 01 85 64 FF 30 EB 01 83 64 89 20 EB 02 CD 20 89 00 9A 64 8F 05 00 00 00 00 EB 02 C1 90 58 61 EB 01 3E BE 01 00 00 00 C1 E6 02 83 EC 04 87 DE 89 1C 24 }
 	condition:
-		$1 at pe.entry_point
+		@1 < pe.overlay.offset or $1
 }
 
 rule enigma_11x {
@@ -4869,6 +4880,18 @@ rule enigma_1x_02 {
 		$1 = { 00 00 00 56 69 72 74 75 61 6C 41 6C 6C 6F 63 00 00 00 56 69 72 74 75 61 6C 46 72 65 65 00 00 00 47 65 74 4D 6F 64 75 6C 65 48 61 6E 64 6C 65 41 00 00 00 47 65 74 50 72 6F 63 41 64 64 72 65 73 73 00 00 00 45 78 69 74 50 72 6F 63 65 73 73 00 00 00 4C 6F 61 64 4C 69 62 72 61 72 79 41 00 00 00 4D 65 73 73 61 67 65 42 6F 78 41 00 00 00 52 65 67 43 6C 6F 73 65 4B 65 79 00 00 00 53 79 73 46 72 65 65 53 74 72 69 6E 67 00 00 00 43 72 65 61 74 65 46 6F 6E 74 41 00 00 00 53 68 65 6C 6C 45 78 65 63 75 74 65 41 00 00 }
 	condition:
 		$1 at pe.entry_point
+}
+
+rule enigma_1x_03 {
+	meta:
+		tool = "P"
+		name = "Enigma"
+		version = "1.x+"
+		pattern = "60E8000000005D81ED0600000081ED????????E9??000000454E49474D41"
+	strings:
+		$1 = { 60 E8 00 00 00 00 5D 81 ED 06 00 00 00 81 ED ?? ?? ?? ?? E9 ?? 00 00 00 45 4E 49 47 4D 41 }
+	condition:
+		@1 < pe.overlay.offset or $1
 }
 
 rule enigma_131 {
@@ -9292,7 +9315,6 @@ rule nx_pe_packer_10 {
 		$1 at pe.entry_point
 }
 
-
 rule obsidium_10059f {
 	meta:
 		tool = "P"
@@ -10416,7 +10438,7 @@ rule re_pack_100_02 {
 	strings:
 		$1 = { C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 0D 0A 20 2D 3D FE 20 50 45 2D 50 41 43 4B 20 76 31 2E 30 20 2D FE 2D 20 28 43 29 20 43 6F 70 79 72 69 67 68 74 20 31 39 39 38 20 62 79 20 41 4E 41 4B 69 4E 20 FE 3D 2D 20 0D 0A C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 C4 }
 	condition:
-		$1 at pe.entry_point
+		$1
 }
 
 rule pe_protect_09_01 {
@@ -11660,7 +11682,6 @@ rule pespin_1330 {
 		$1 at pe.entry_point
 }
 
-
 rule pestuboep_1x_01 {
 	meta:
 		tool = "P"
@@ -11713,9 +11734,9 @@ rule petite_12 {
 		tool = "P"
 		name = "Petite"
 		version = "1.2"
-		pattern = "9C60E8CA??????03??04??05??06??07??08"
+		pattern = "(66)9C60E8CA??????03??04??05??06??07??08"
 	strings:
-		$1 = { 9C 60 E8 CA ?? ?? ?? 03 ?? 04 ?? 05 ?? 06 ?? 07 ?? 08 }
+		$1 = { (66) 9C 60 E8 CA ?? ?? ?? 03 ?? 04 ?? 05 ?? 06 ?? 07 ?? 08 }
 	condition:
 		$1 at pe.entry_point
 }
@@ -11869,23 +11890,13 @@ rule petite_22_03 {
 		tool = "P"
 		name = "Petite"
 		version = "2.2"
-		pattern = "B8??????????68????????64FF350000000064892500000000669C6050680000????8B3C248B306681C780078D74060889388B5E1050566A026880080000576A??6A06566A04688008000057FFD383EE0859F3A5596683C76881C6????0000F3A5FFD3588D90B80100008B0A0FBAF11F73168B0424FD8BF08BF8037204037A08F3A583C20CFCEBE283C2108B5AF485DB74D88B04248B7AF803F8528D3401EB175858585A74C4E91C"
+		pattern = "B800??????6A0068????????64FF350000000064892500000000669C60508BD8030068??????006A00FF501C8bcc8d"
 	strings:
-		$1 = { B8 ?? ?? ?? ?? ?? 68 ?? ?? ?? ?? 64 FF 35 00 00 00 00 64 89 25 00 00 00 00 66 9C 60 50 68 00 00 ?? ?? 8B 3C 24 8B 30 66 81 C7 80 07 8D 74 06 08 89 38 8B 5E 10 50 56 6A 02 68 80 08 00 00 57 6A ?? 6A 06 56 6A 04 68 80 08 00 00 57 FF D3 83 EE 08 59 F3 A5 59 66 83 C7 68 81 C6 ?? ?? 00 00 F3 A5 FF D3 58 8D 90 B8 01 00 00 8B 0A 0F BA F1 1F 73 16 8B 04 24 FD 8B F0 8B F8 03 72 04 03 7A 08 F3 A5 83 C2 0C FC EB E2 83 C2 10 8B 5A F4 85 DB 74 D8 8B 04 24 8B 7A F8 03 F8 52 8D 34 01 EB 17 58 58 58 5A 74 C4 E9 1C }
+		$1 = { B8 00 ?? ?? ?? 6A 00 68 ?? ?? ?? ?? 64 FF 35 00 00 00 00 64 89 25 00 00 00 00 66 9C 60 50 8B D8 03 00 68 ?? ?? ?? 00 6A 00 FF 50 1C 8b cc 8d }
+		$2 = { B8 00 ?? ?? ??       68 ?? ?? ?? ?? 64 FF 35 00 00 00 00 64 89 25 00 00 00 00 66 9C 60 50 68 00 00 ?? ?? 8b 3c 24 8b 30 66 81 c7 80 07 8d 74 }
 	condition:
-		$1 at pe.entry_point
-}
-
-rule petite_22_or_higher {
-	meta:
-		tool = "P"
-		name = "Petite"
-		version = "2.2 or higher"
-		pattern = "B8????????6A??68????????64FF350000000064892500000000669C60508BD8030068????????6A00FF50"
-	strings:
-		$1 = { B8 ?? ?? ?? ?? 6A ?? 68 ?? ?? ?? ?? 64 FF 35 00 00 00 00 64 89 25 00 00 00 00 66 9C 60 50 8B D8 03 00 68 ?? ?? ?? ?? 6A 00 FF 50 }
-	condition:
-		$1 at pe.entry_point
+		$1 at pe.entry_point or
+		$2 at pe.entry_point
 }
 
 rule petite_23 {
@@ -11893,9 +11904,23 @@ rule petite_23 {
 		tool = "P"
 		name = "Petite"
 		version = "2.3"
-		pattern = "B800?0??0068????4?0064FF350000000064892500000000669C60508BD8030068????0?006A00FF501C89430868000040008B3C248B336681C780078D741E08893B538B5E10B880080000566A0250576A??6A0A566A045057FFD383EE0859F3A5596683"
+		pattern = "B800??????(6A00)68????????64FF350000000064892500000000669C60508BD8030068????0?006A00FF501C894308"
 	strings:
-		$1 = { B8 00 ?0 ?? 00 68 ?? ?? 4? 00 64 FF 35 00 00 00 00 64 89 25 00 00 00 00 66 9C 60 50 8B D8 03 00 68 ?? ?? 0? 00 6A 00 FF 50 1C 89 43 08 68 00 00 40 00 8B 3C 24 8B 33 66 81 C7 80 07 8D 74 1E 08 89 3B 53 8B 5E 10 B8 80 08 00 00 56 6A 02 50 57 6A ?? 6A 0A 56 6A 04 50 57 FF D3 83 EE 08 59 F3 A5 59 66 83 }
+		$1 = { B8 00 ?? ?? ?? 6A 00 68 ?? ?? ?? ?? 64 FF 35 00 00 00 00 64 89 25 00 00 00 00 66 9C 60 50 8B D8 03 00 68 ?? ?? ?? 00 6A 00 FF 50 1C 89 43 08 }
+		$2 = { B8 00 ?? ?? ??       68 ?? ?? ?? ?? 64 FF 35 00 00 00 00 64 89 25 00 00 00 00 66 9C 60 50 8B D8 03 00 68 ?? ?? ?? 00 6A 00 FF 50 1C 89 43 08 }
+	condition:
+		$1 at pe.entry_point or
+		$2 at pe.entry_point
+}
+
+rule petite_24 {
+	meta:
+		tool = "P"
+		name = "Petite"
+		version = "2.4"
+		pattern = "B8????????608DA8??????F?68????????6A40680030000068??????006A00ff90????00008944241Cbb????00008db5??????008bf850E80?0000007407"
+	strings:
+		$1 = { B8 ?? ?? ?? ?? 60 8D A8 ?? ?? ?? F? 68 ?? ?? ?? ?? 6A 40 68 00 30 00 00 68 ?? ?? ?? 00 6A 00 ff 90 ?? ?? 00 00 89 44 24 1C bb ?? ?? 00 00 8d b5 ?? ?? ?? 00 8b f8 50 E8 0? 00 00 00 74 07 }
 	condition:
 		$1 at pe.entry_point
 }
@@ -12408,7 +12433,6 @@ rule qryptor_uv_03 {
 	condition:
 		$1 at pe.entry_point
 }
-
 
 rule riscs_process_patcher_14 {
 	meta:
@@ -15078,7 +15102,6 @@ rule upack_024_031 {
 		$1 at pe.entry_point
 }
 
-
 rule upack_024b {
 	meta:
 		tool = "P"
@@ -16644,6 +16667,18 @@ rule vmprotect_1x {
 		$1 at pe.entry_point
 }
 
+rule vmprotect_2x_xx {
+	meta:
+		tool = "P"
+		name = "VMProtect"
+		version = "2.04+"
+		pattern = "50F01FFDFD8??7926???B4??C2???07?4?????C?C??F?D2?6??19CBF0?9912?717??3635CA8A?7?0???F?C?D7D7??9E5?1?84E4???24??D45?5?C?04B9E?D?2?15?89??6?784?????D9??1?1?E??03?????446?6???3EC941E?6A??4?5????????8?C??8???2???0C8EB?C1?D?"
+	strings:
+		$1 = { 50 F0 1F FD FD 8? ?7 92 6? ?? B4 ?? C2 ?? ?0 7? 4? ?? ?? C? C? ?F ?D 2? 6? ?1 9C BF 0? 99 12 ?7 17 ?? 36 35 CA 8A ?7 ?0 ?? ?F ?C ?D 7D 7? ?9 E5 ?1 ?8 4E 4? ?? 24 ?? D4 5? 5? C? 04 B9 E? D? 2? 15 ?8 9? ?6 ?7 84 ?? ?? ?D 9? ?1 ?1 ?E ?? 03 ?? ?? ?4 46 ?6 ?? ?3 EC 94 1E ?6 A? ?4 ?5 ?? ?? ?? ?? 8? C? ?8 ?? ?2 ?? ?0 C8 EB ?C 1? D? }
+	condition:
+		@1 < pe.overlay.offset
+}
+
 rule vob_protectcd_uv {
 	meta:
 		tool = "P"
@@ -17951,7 +17986,6 @@ rule yodas_protector_10b {
 	condition:
 		$1 at pe.entry_point
 }
-
 
 rule yodas_protector_101 {
 	meta:

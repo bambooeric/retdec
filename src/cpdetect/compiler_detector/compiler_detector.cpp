@@ -12,11 +12,11 @@
 #include "retdec/cpdetect/compiler_detector/compiler_detector.h"
 #include "retdec/cpdetect/settings.h"
 #include "retdec/cpdetect/utils/version_solver.h"
-
+#include "retdec/yaracpp/yara_detector/yara_detector.h"
 
 using namespace retdec::fileformat;
 using namespace retdec::utils;
-using namespace yaracpp;
+using namespace retdec::yaracpp;
 
 namespace retdec {
 namespace cpdetect {
@@ -292,6 +292,37 @@ void CompilerDetector::removeUnusedCompilers()
 }
 
 /**
+ * Add all YARA files from the given @p dir to internal paths member.
+ */
+void CompilerDetector::populateInternalPaths(
+		const retdec::utils::FilesystemPath& dir,
+		bool recursive)
+{
+	if (!dir.isDirectory())
+	{
+		return;
+	}
+
+	for (const auto *subpath : dir)
+	{
+		if (subpath->isFile()
+				&& std::any_of(externalSuffixes.begin(), externalSuffixes.end(),
+				[&] (const auto &suffix)
+			{
+				return endsWith(subpath->getPath(), suffix);
+			}
+		))
+		{
+			internalPaths.push_back(subpath->getPath());
+		}
+		else if (recursive && subpath->isDirectory())
+		{
+			populateInternalPaths(*subpath);
+		}
+	}
+}
+
+/**
  * Try detect used compiler (or packer) based on heuristics
  */
 void CompilerDetector::getAllHeuristics()
@@ -311,16 +342,20 @@ ReturnCode CompilerDetector::getAllSignatures()
 	YaraDetector yara;
 
 	// Add internal paths.
+	unsigned iCntr = 0;
 	for (const auto &ruleFile : internalPaths)
 	{
-		yara.addRuleFile(ruleFile);
+		std::string nameSpace = "internal_" + std::to_string(iCntr++);
+		yara.addRuleFile(ruleFile, nameSpace);
 	}
 
+	unsigned eCntr = 0;
 	if (cpParams.external && getExternalDatabases())
 	{
 		for (const auto &item : externalDatabase)
 		{
-			yara.addRuleFile(item);
+			std::string nameSpace = "external_" + std::to_string(eCntr++);
+			yara.addRuleFile(item, nameSpace);
 		}
 	}
 
@@ -402,7 +437,8 @@ ReturnCode CompilerDetector::getAllSignatures()
 			const auto *absoluteStartMeta = rule.getMeta("absoluteStart");
 			if (absoluteStartMeta)
 			{
-				if (!strToNum(absoluteStartMeta->getStringValue(), base))
+				if (absoluteStartMeta->getType() == yaracpp::YaraMeta::Type::String
+					&& !strToNum(absoluteStartMeta->getStringValue(), base))
 				{
 					continue;
 				}
@@ -497,6 +533,12 @@ ReturnCode CompilerDetector::getAllInformation()
 	fileParser.getImageBaseAddress(toolInfo.imageBase);
 	toolInfo.entryPointAddress = fileParser.getEpAddress(toolInfo.epAddress);
 	toolInfo.entryPointOffset = fileParser.getEpOffset(toolInfo.epOffset);
+
+	if((toolInfo.overlaySize = fileParser.getOverlaySize()) != 0)
+	{
+		toolInfo.overlayOffset = fileParser.getDeclaredFileLength();
+	}
+
 	const bool invalidEntryPoint = !toolInfo.entryPointAddress || !toolInfo.entryPointOffset;
 	if (!fileParser.getHexEpBytes(toolInfo.epBytes, cpParams.epBytesCount)
 			&& !invalidEntryPoint && !fileParser.isInValidState())

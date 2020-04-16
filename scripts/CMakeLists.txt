@@ -1,11 +1,37 @@
-install(PROGRAMS "retdec-color-c.py" DESTINATION bin)
-install(PROGRAMS "retdec-config.sh" DESTINATION bin)
-install(PROGRAMS "retdec-archive-decompiler.sh" DESTINATION bin)
-install(PROGRAMS "retdec-decompiler.sh" DESTINATION bin)
-install(PROGRAMS "retdec-fileinfo.sh" DESTINATION bin)
+
+install(
+	PROGRAMS "retdec-config.py"
+	DESTINATION ${RETDEC_INSTALL_BIN_DIR}
+)
+install(
+	PROGRAMS "retdec-archive-decompiler.py"
+	DESTINATION ${RETDEC_INSTALL_BIN_DIR}
+)
+install(
+	PROGRAMS "retdec-decompiler.py"
+	DESTINATION ${RETDEC_INSTALL_BIN_DIR}
+)
+install(
+	PROGRAMS "retdec-fileinfo.py"
+	DESTINATION ${RETDEC_INSTALL_BIN_DIR}
+)
+
 if(RETDEC_TESTS)
-	install(PROGRAMS "retdec-tests-runner.sh" DESTINATION bin)
+	install(
+		PROGRAMS "retdec-tests-runner.py"
+		DESTINATION ${RETDEC_INSTALL_BIN_DIR}
+	)
 endif()
-install(PROGRAMS "retdec-signature-from-library-creator.sh" DESTINATION bin)
-install(PROGRAMS "retdec-unpacker.sh" DESTINATION bin)
-install(PROGRAMS "retdec-utils.sh" DESTINATION bin)
+
+install(
+	PROGRAMS "retdec-signature-from-library-creator.py"
+	DESTINATION ${RETDEC_INSTALL_BIN_DIR}
+)
+install(
+	PROGRAMS "retdec-unpacker.py"
+	DESTINATION ${RETDEC_INSTALL_BIN_DIR}
+)
+install(
+	PROGRAMS "retdec-utils.py"
+	DESTINATION ${RETDEC_INSTALL_BIN_DIR}
+)
