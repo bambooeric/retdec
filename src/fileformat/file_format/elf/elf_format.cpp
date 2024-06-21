@@ -4,13 +4,16 @@
  * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
 
+#include <elfio/elf_types.hpp>
 #include <map>
+#include <regex>
 
 #include "retdec/utils/conversion.h"
 #include "retdec/utils/string.h"
 #include "retdec/fileformat/file_format/elf/elf_format.h"
 #include "retdec/fileformat/types/symbol_table/elf_symbol.h"
 #include "retdec/fileformat/utils/conversions.h"
+#include <tlsh/tlsh.h>
 
 using namespace retdec::utils;
 using namespace ELFIO;
@@ -1424,7 +1427,7 @@ ELFIO::section* ElfFormat::addPltRelocationTable(ELFIO::section *dynamicSection,
 	const auto *relEntrySizeRecord = table.getRecordOfType(DT_RELENT);
 	const auto *relaEntrySizeRecord = table.getRecordOfType(DT_RELAENT);
 
-	if(!pltgotRecord || !addrRecord || !sizeRecord)
+	if(!pltgotRecord || !addrRecord || !sizeRecord || !entryTypeRecord)
 	{
 		return nullptr;
 	}
@@ -1733,6 +1736,14 @@ void ElfFormat::loadSymbols(const ELFIO::elfio *file, const ELFIO::symbol_sectio
 	std::unordered_multimap<std::string, unsigned long long> importNameAddressMap;
 	loadRelocations(file, section, importNameAddressMap);
 
+	/* check to ignore symbols from segments for telfhash this is pretty
+	   ugly and error prone, find a better way to know symbol source */
+	bool isSegmentSymbols = section->get_name().find("dynamic_") != std::string::npos;
+
+	if (!telfhashDynsym && !isSegmentSymbols) {
+		telfhashSymbols = {};
+	}
+
 	for(std::size_t i = 0, e = elfSymbolTable->get_loaded_symbols_num(); i < e; ++i)
 	{
 		auto symbol = std::make_shared<ElfSymbol>();
@@ -1747,6 +1758,15 @@ void ElfFormat::loadSymbols(const ELFIO::elfio *file, const ELFIO::symbol_sectio
 		symbol->setElfBind(bind);
 		symbol->setElfOther(other);
 		link = fixSymbolLink(link, value);
+		auto visibility = other & 0x3;
+		if (type == STT_FUNC && bind == STB_GLOBAL && visibility == STV_DEFAULT) {
+			/* check if we already have prefered dynsym symbols and ignore symbols from segments
+			   this is pretty ugly and error prone, find a better way to know symbol source */
+			if (!telfhashDynsym && !isSegmentSymbols) {
+				telfhashSymbols.push_back(name);
+			}
+		}
+
 		if(link >= file->sections.size() || !file->sections[link] || link == SHN_ABS ||
 			link == SHN_COMMON || link == SHN_UNDEF || link == SHN_XINDEX)
 		{
@@ -1758,7 +1778,7 @@ void ElfFormat::loadSymbols(const ELFIO::elfio *file, const ELFIO::symbol_sectio
 			{
 				if(!importTable)
 				{
-					importTable = new ImportTable();
+					importTable = new ElfImportTable();
 				}
 				auto keyIter = importNameAddressMap.equal_range(name);
 				// we create std::set from std::multimap values in order to ensure determinism
@@ -1798,6 +1818,7 @@ void ElfFormat::loadSymbols(const ELFIO::elfio *file, const ELFIO::symbol_sectio
 	}
 
 	symtab->setName(section->get_name());
+
 	if(symtab->hasSymbols())
 	{
 		symbolTables.push_back(symtab);
@@ -1806,9 +1827,83 @@ void ElfFormat::loadSymbols(const ELFIO::elfio *file, const ELFIO::symbol_sectio
 	{
 		delete symtab;
 	}
+	if (section->get_type() == SHT_DYNSYM) {
+		telfhashDynsym = true;
+	}
 
+	loadTelfhash();
 	loadImpHash();
 	loadExpHash();
+}
+
+/* exclusions are based on the original implementation
+   https://github.com/trendmicro/telfhash/blob/master/telfhash/telfhash.py */
+static const std::unordered_set<std::string> exclusion_set = {
+	"__libc_start_main", // main function
+	"main", // main function
+	"abort", // ARM default
+	"cachectl", // MIPS default
+	"cacheflush", // MIPS default
+	"puts", // Compiler optimization (function replacement)
+	"atol", // Compiler optimization (function replacement)
+	"malloc_trim" // GNU extensions
+};
+
+/*
+ignore
+	symbols starting with . or
+	x86-64 specific functions
+	string functions (str.* and mem.*), gcc changes them depending on architecture
+	symbols starting with . or _
+*/
+static std::regex exclusion_regex("(^[_\.].*$)|(^.*64$)|(^str.*$)|(^mem.*$)");
+
+static bool isSymbolExcluded(const std::string& symbol)
+{
+	return symbol.empty()
+	|| std::regex_match(symbol, exclusion_regex)
+	|| exclusion_set.count(symbol);
+}
+
+void ElfFormat::loadTelfhash()
+{
+	std::vector<std::string> imported_symbols;
+	imported_symbols.reserve(telfhashSymbols.size());
+
+	for (const auto& symbol : telfhashSymbols) {
+		/* It is important to first exclude, then lowercase
+		   as "Str_Aprintf" is valid, but would become
+		   filtered when lower case */
+		if (isSymbolExcluded(symbol)) {
+			continue;
+		}
+
+		auto name = toLower(symbol);
+
+		imported_symbols.emplace_back(name);
+	}
+
+	/* sort them lexicographically */
+	std::sort(imported_symbols.begin(), imported_symbols.end());
+
+	std::string impHashString;
+	for (const auto& symbol : imported_symbols) {
+		if (!impHashString.empty())
+			impHashString.append(1, ',');
+
+		impHashString.append(symbol);
+	}
+
+	if (impHashString.size()) {
+		auto data = reinterpret_cast<const uint8_t*>(impHashString.data());
+
+		Tlsh tlsh;
+		tlsh.update(data, impHashString.size());
+
+		tlsh.final();
+		const int show_version = 1; /* this prepends the hash with 'T' + number of the version */
+		telfhash = tlsh.getHash(show_version);
+	}
 }
 
 /**
@@ -1967,6 +2062,25 @@ void ElfFormat::loadSections()
 	}
 }
 
+void ElfFormat::checkSegmentLoadable(const segment* seg)
+{
+	if (!seg)
+		return;
+
+	auto filesize = seg->get_file_size();
+	auto fileoffset = seg->get_offset();
+	int segtype = seg->get_type();
+
+	// Check if LOAD segments are actually in the file
+	if (segtype == PT_LOAD && getFileLength() < fileoffset + filesize)
+	{
+		_ldrErrInfo.isLoadableAnyway = false;
+		_ldrErrInfo.loaderErrorCode = ElfLoaderError::LDR_ERROR_SEGMENT_OUT_OF_FILE;
+		_ldrErrInfo.loaderError = "LOAD Segment data is not within file bounds";
+		_ldrErrInfo.loaderErrorUserFriendly = "LOAD Segment data is not within file bounds";
+	}
+}
+
 /**
  * Load information about segments
  */
@@ -1993,6 +2107,8 @@ void ElfFormat::loadSegments()
 		fSeg->setElfAlign(seg->get_align());
 		fSeg->load(this);
 		segments.push_back(fSeg);
+
+		checkSegmentLoadable(seg);
 	}
 }
 
@@ -2026,10 +2142,10 @@ void ElfFormat::loadDynamicSegmentSection()
 				}
 				sec->load(*reader.get_istream(), sec->get_offset(), sec->get_size());
 
-				auto dyn = dynamic_section_accessor(reader, sec);
-				if (loadDynamicTable(&dyn, sec))
+				dynamic_section_accessor dyn(reader, sec);
+				if (auto* tbl = loadDynamicTable(&dyn, sec))
 				{
-					loadInfoFromDynamicTables(*dynamicTables.back(), sec);
+					loadInfoFromDynamicTables(*tbl, sec);
 				}
 			}
 		}
@@ -2057,7 +2173,7 @@ void ElfFormat::loadInfoFromDynamicSegment()
 		std::size_t segSz = getFileLength() - seg->get_offset();
 
 		seg->load(*reader.get_istream(), seg->get_offset(), segSz);
-		auto *dynamic = writer.sections.add("dynamic_" + numToStr(noOfDynTables++));
+		auto *dynamic = writer.sections.add("dynamic_" + std::to_string(noOfDynTables++));
 		dynamic->set_type(SHT_DYNAMIC);
 		dynamic->set_offset(seg->get_offset());
 		dynamic->set_address(seg->get_virtual_address());
@@ -2067,11 +2183,11 @@ void ElfFormat::loadInfoFromDynamicSegment()
 		dynamic->set_size(segSz);
 		dynamic->set_data(seg->get_data(), segSz);
 
-		auto *accessor = new dynamic_section_accessor(writer, dynamic);
-		loadDynamicTable(accessor, dynamic);
-		delete accessor;
-
-		loadInfoFromDynamicTables(*dynamicTables.back(), dynamic);
+		dynamic_section_accessor accessor(writer, dynamic);
+		if (auto* tbl = loadDynamicTable(&accessor, dynamic))
+		{
+			loadInfoFromDynamicTables(*tbl, dynamic);
+		}
 	}
 }
 
@@ -2079,9 +2195,9 @@ void ElfFormat::loadInfoFromDynamicSegment()
  * Load dynamic table
  * @param elfDynamicTable Pointer to dynamic section accessor
  * @param sec Pointer to dynamic table section
- * @return @c True if table was successfully loaded, @c false otherwise.
+ * @return Successfully loaded table, @c nullptr otherwise.
  */
-bool ElfFormat::loadDynamicTable(
+DynamicTable* ElfFormat::loadDynamicTable(
 		const ELFIO::dynamic_section_accessor *elfDynamicTable,
 		const ELFIO::section *sec)
 {
@@ -2093,13 +2209,12 @@ bool ElfFormat::loadDynamicTable(
 	loadDynamicTable(*table, elfDynamicTable);
 	if (table->getNumberOfRecords() > 0)
 	{
-		dynamicTables.push_back(table);
-		return true;
+		return dynamicTables.emplace_back(table);
 	}
 	else
 	{
 		delete table;
-		return false;
+		return nullptr;
 	}
 }
 
@@ -2148,9 +2263,8 @@ void ElfFormat::loadInfoFromDynamicTables(DynamicTable &dynTab, ELFIO::section *
 		return;
 	}
 
-	auto *dynAccessor = new dynamic_section_accessor(writer, sec);
-	loadDynamicTable(dynTab, dynAccessor);
-	delete dynAccessor;
+	dynamic_section_accessor dynAccessor(writer, sec);
+	loadDynamicTable(dynTab, &dynAccessor);
 
 	auto *symTab = addSymbolTable(sec, dynTab, strTab);
 	if(!symTab)
@@ -2606,7 +2720,7 @@ std::size_t ElfFormat::getBytesPerWord() const
 
 bool ElfFormat::hasMixedEndianForDouble() const
 {
-	unsigned long long abiVersion = 0;
+	std::uint64_t abiVersion = 0;
 	bool hasAbi = getAbiVersion(abiVersion);
 	return isArm() && (!hasAbi || abiVersion < 5);
 }
@@ -2641,13 +2755,13 @@ bool ElfFormat::isExecutable() const
 	return reader.get_type() == ET_EXEC;
 }
 
-bool ElfFormat::getMachineCode(unsigned long long &result) const
+bool ElfFormat::getMachineCode(std::uint64_t &result) const
 {
 	result = reader.get_machine();
 	return true;
 }
 
-bool ElfFormat::getAbiVersion(unsigned long long &result) const
+bool ElfFormat::getAbiVersion(std::uint64_t &result) const
 {
 	// this works only for 32-bit ARM
 	if(!isArm() || getWordLength() != 32)
@@ -2664,14 +2778,14 @@ bool ElfFormat::getAbiVersion(unsigned long long &result) const
 	return abi;
 }
 
-bool ElfFormat::getImageBaseAddress(unsigned long long &imageBase) const
+bool ElfFormat::getImageBaseAddress(std::uint64_t &imageBase) const
 {
 	// not in ELF files
 	static_cast<void>(imageBase);
 	return false;
 }
 
-bool ElfFormat::getEpAddress(unsigned long long &result) const
+bool ElfFormat::getEpAddress(std::uint64_t &result) const
 {
 	const unsigned long long epAddress = reader.get_entry();
 	if(epAddress)
@@ -2702,9 +2816,9 @@ bool ElfFormat::getEpAddress(unsigned long long &result) const
 	return false;
 }
 
-bool ElfFormat::getEpOffset(unsigned long long &epOffset) const
+bool ElfFormat::getEpOffset(std::uint64_t &epOffset) const
 {
-	unsigned long long epRva;
+	std::uint64_t epRva;
 	if(!getEpAddress(epRva))
 	{
 		return false;
@@ -2957,6 +3071,11 @@ unsigned long long ElfFormat::getBaseOffset() const
 	}
 
 	return minOffset == std::numeric_limits<unsigned long long>::max() ? 0 : minOffset;
+}
+
+
+const std::string& ElfFormat::getTelfhash() const {
+	return telfhash;
 }
 
 } // namespace fileformat

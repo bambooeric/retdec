@@ -503,15 +503,27 @@ void MachOFormat::loadSectionRelocations(std::size_t offset, std::size_t count)
 {
 	if (count)
 	{
+		auto *buffPtr = getBufferStart() + offset;
+		auto *buffEnd = getBufferEnd();
+		if (buffPtr >= buffEnd)
+		{
+			return;
+		}
+
 		auto *tabPtr = new RelocationTable;
 		tabPtr->setLinkToSymbolTable(0);
 		// Load relocations
-		auto *buffPtr = getBufferStart() + offset;
 		for (std::size_t i = 0; i < count; ++i)
 		{
 			// Load relocation info struct as 2 times 4 bytes and swap endianness if necessary
 			std::int32_t rInfo[2];
-			memcpy(rInfo, buffPtr + i * 8, 8);
+			auto *src = buffPtr + i * 8;
+			std::size_t sz = 8;
+			if (src + sz >= buffEnd)
+			{
+				break;
+			}
+			memcpy(rInfo, src, sz);
 			if(isLittle != sys::IsLittleEndianHost)
 			{
 				sys::swapByteOrder(rInfo[0]);
@@ -702,6 +714,10 @@ void MachOFormat::oldEntryPointCommand(const llvm::object::MachOObjectFile::Load
 void MachOFormat::loadDylibCommand(const llvm::object::MachOObjectFile::LoadCommandInfo &commandInfo)
 {
 	auto command = file->getDylibIDLoadCommand(commandInfo);
+	if (command.dylib.name >= command.cmdsize)
+	{
+		return;
+	}
 	std::string name = commandInfo.Ptr + command.dylib.name;
 	// Try to get short name
 	StringRef sufix;
@@ -952,7 +968,7 @@ void MachOFormat::dyldInfoCommand(const llvm::object::MachOObjectFile::LoadComma
 			std::string name = exportRef.name().str();
 			if(name.empty())
 			{
-				exportSym.setName("exported_function_" + numToStr(exportRef.address(), std::hex));
+				exportSym.setName("exported_function_" + intToHexString(exportRef.address()));
 			}
 			else
 			{
@@ -964,6 +980,7 @@ void MachOFormat::dyldInfoCommand(const llvm::object::MachOObjectFile::LoadComma
 		if (err)
 		{
 			// ignore errors
+			consumeError(std::move(err));
 		}
 	}
 
@@ -989,6 +1006,7 @@ void MachOFormat::dyldInfoCommand(const llvm::object::MachOObjectFile::LoadComma
 		if (err)
 		{
 			// ignore errors
+			consumeError(std::move(err));
 		}
 	}
 
@@ -1008,6 +1026,7 @@ void MachOFormat::dyldInfoCommand(const llvm::object::MachOObjectFile::LoadComma
 		if (err)
 		{
 			// ignore errors
+			consumeError(std::move(err));
 		}
 	}
 
@@ -1027,6 +1046,7 @@ void MachOFormat::dyldInfoCommand(const llvm::object::MachOObjectFile::LoadComma
 		if (err)
 		{
 			// ignore errors
+			consumeError(std::move(err));
 		}
 	}
 }
@@ -1290,6 +1310,15 @@ const char *MachOFormat::getBufferStart() const
 }
 
 /**
+ * Get pointer to the end of LLVM buffer with file content.
+ * @return Pointer to buffer
+ */
+const char *MachOFormat::getBufferEnd() const
+{
+	return fileBuffer.get()->getBufferEnd();
+}
+
+/**
  * Clear all loaded commands
  */
 void MachOFormat::clearCommands()
@@ -1355,23 +1384,23 @@ bool MachOFormat::isExecutable() const
 	return filetype == MachO::MH_EXECUTE || filetype == MachO::MH_PRELOAD;
 }
 
-bool MachOFormat::getMachineCode(unsigned long long &result) const
+bool MachOFormat::getMachineCode(std::uint64_t &result) const
 {
 	is32 ? result = static_cast<unsigned long long>(header32.cputype) : result = static_cast<unsigned long long>(header64.cputype);
 	return true;
 }
 
-bool MachOFormat::getAbiVersion(unsigned long long &result) const
+bool MachOFormat::getAbiVersion(std::uint64_t &result) const
 {
 	return false;
 }
 
-bool MachOFormat::getImageBaseAddress(unsigned long long &imageBase) const
+bool MachOFormat::getImageBaseAddress(std::uint64_t &imageBase) const
 {
 	return false;
 }
 
-bool MachOFormat::getEpAddress(unsigned long long &result) const
+bool MachOFormat::getEpAddress(std::uint64_t &result) const
 {
 	if(hasEntryPoint)
 	{
@@ -1382,7 +1411,7 @@ bool MachOFormat::getEpAddress(unsigned long long &result) const
 	return false;
 }
 
-bool MachOFormat::getEpOffset(unsigned long long &epOffset) const
+bool MachOFormat::getEpOffset(std::uint64_t &epOffset) const
 {
 	if(hasEntryPoint)
 	{

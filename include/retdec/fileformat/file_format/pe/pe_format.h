@@ -7,20 +7,17 @@
 #ifndef RETDEC_FILEFORMAT_FILE_FORMAT_PE_PE_FORMAT_H
 #define RETDEC_FILEFORMAT_FILE_FORMAT_PE_PE_FORMAT_H
 
-#include "retdec/crypto/hash_context.h"
 #include "retdec/fileformat/file_format/file_format.h"
-#include "retdec/fileformat/file_format/pe/pe_format_parser/pe_format_parser.h"
+#include "retdec/fileformat/file_format/pe/pe_format_parser.h"
 #include "retdec/fileformat/types/dotnet_headers/blob_stream.h"
 #include "retdec/fileformat/types/dotnet_headers/guid_stream.h"
 #include "retdec/fileformat/types/dotnet_headers/metadata_stream.h"
 #include "retdec/fileformat/types/dotnet_headers/string_stream.h"
 #include "retdec/fileformat/types/dotnet_headers/user_string_stream.h"
 #include "retdec/fileformat/types/dotnet_types/dotnet_class.h"
+#include "retdec/fileformat/types/pe_timestamps/pe_timestamps.h"
 #include "retdec/fileformat/types/visual_basic/visual_basic_info.h"
-#include "retdec/pelib/PeLib.h"
-
-// Forward declare OpenSSL structures used in this header.
-typedef struct pkcs7_st PKCS7;
+#include "retdec/pelib/PeFile.h"
 
 namespace retdec {
 namespace fileformat {
@@ -32,7 +29,6 @@ class PeFormat : public FileFormat
 {
 	private:
 		PeFormatParser *formatParser;                              ///< parser of PE file
-		PeLib::MzHeader mzHeader;                                  ///< MZ header
 		std::unique_ptr<CLRHeader> clrHeader;                      ///< .NET CLR header
 		std::unique_ptr<MetadataHeader> metadataHeader;            ///< .NET metadata header
 		std::unique_ptr<MetadataStream> metadataStream;            ///< .NET metadata stream
@@ -49,7 +45,6 @@ class PeFormat : public FileFormat
 		std::string typeRefHashSha256;                             ///< .NET typeref table hash as SHA256
 		VisualBasicInfo visualBasicInfo;                           ///< visual basic header information
 
-		static const std::unordered_set<std::string> defDllList;   ///< Default set of DLLs for checking dependency missing
 		std::unordered_set<std::string> dllList;                   ///< Override set of DLLs for checking dependency missing
 		bool errorLoadingDllList;                                  ///< If true, then an error happened while loading DLL list
 
@@ -80,13 +75,7 @@ class PeFormat : public FileFormat
 		void loadResources();
 		void loadCertificates();
 		void loadTlsInformation();
-		/// @}
-
-		/// @name Signature verification methods
-		/// @{
-		bool verifySignature(PKCS7 *p7);
-		std::vector<std::tuple<const std::uint8_t*, std::size_t>> getDigestRanges() const;
-		std::string calculateDigest(retdec::crypto::HashAlgorithm hashType) const;
+		static bool checkDefaultList(std::string_view);
 		/// @}
 
 		/// @name .NET methods
@@ -116,17 +105,14 @@ class PeFormat : public FileFormat
 		/// @}
 		/// @name Auxiliary scanning methods
 		/// @{
-		void scanForSectionAnomalies();
+		void scanForSectionAnomalies(unsigned anamaliesLimit = 1000);
 		void scanForResourceAnomalies();
 		void scanForImportAnomalies();
 		void scanForExportAnomalies();
 		void scanForOptHeaderAnomalies();
 		/// @}
 	protected:
-		PeLib::PeFile *file;              ///< PeLib representation of PE file
-		PeLib::PeHeaderT<32> *peHeader32; ///< header of 32-bit PE file
-		PeLib::PeHeaderT<64> *peHeader64; ///< header of 64-bit PE file
-		int peClass;                      ///< class of PE file
+		PeLib::PeFileT *file;              ///< PeLib representation of PE file
 	public:
 		PeFormat(const std::string & pathToFile, const std::string & dllListFile, LoadFlags loadFlags = LoadFlags::NONE);
 		PeFormat(std::istream &inputStream, LoadFlags loadFlags = LoadFlags::NONE);
@@ -147,11 +133,11 @@ class PeFormat : public FileFormat
 		virtual bool isObjectFile() const override;
 		virtual bool isDll() const override;
 		virtual bool isExecutable() const override;
-		virtual bool getMachineCode(unsigned long long &result) const override;
-		virtual bool getAbiVersion(unsigned long long &result) const override;
-		virtual bool getImageBaseAddress(unsigned long long &imageBase) const override;
-		virtual bool getEpAddress(unsigned long long &result) const override;
-		virtual bool getEpOffset(unsigned long long &epOffset) const override;
+		virtual bool getMachineCode(std::uint64_t &result) const override;
+		virtual bool getAbiVersion(std::uint64_t &result) const override;
+		virtual bool getImageBaseAddress(std::uint64_t &imageBase) const override;
+		virtual bool getEpAddress(std::uint64_t &result) const override;
+		virtual bool getEpOffset(std::uint64_t &epOffset) const override;
 		virtual Architecture getTargetArchitecture() const override;
 		virtual std::size_t getDeclaredNumberOfSections() const override;
 		virtual std::size_t getDeclaredNumberOfSegments() const override;
@@ -163,10 +149,11 @@ class PeFormat : public FileFormat
 
 		/// @name Detection methods
 		/// @{
-		const PeLib::MzHeader & getMzHeader() const;
+		const PeLib::ImageLoader & getImageLoader() const;
 		std::size_t getMzHeaderSize() const;
 		std::size_t getOptionalHeaderSize() const;
 		std::size_t getPeHeaderOffset() const;
+		std::size_t getImageBitability() const;
 		std::size_t getCoffSymbolTableOffset() const;
 		std::size_t getNumberOfCoffSymbols() const;
 		std::size_t getSizeOfStringTable() const;
@@ -191,18 +178,19 @@ class PeFormat : public FileFormat
 		bool isMissingDependency(std::string dllname) const;
 		bool dllListFailedToLoad() const;
 		bool initDllList(const std::string & dllListFile);
+		/// @}
 
-		int getPeClass() const;
 		bool isDotNet() const;
 		bool isPackedDotNet() const;
-		bool isVisualBasic(unsigned long long &version) const;
-		bool getDllFlags(unsigned long long &dllFlags) const;
-		bool getNumberOfBaseRelocationBlocks(unsigned long long &relocs) const;
-		bool getNumberOfRelocations(unsigned long long &relocs) const;
-		bool getDataDirectoryRelative(unsigned long long index, unsigned long long &relAddr, unsigned long long &size) const;
-		bool getDataDirectoryAbsolute(unsigned long long index, unsigned long long &absAddr, unsigned long long &size) const;
+		bool isVisualBasic(std::uint64_t &version) const;
+		bool getDllFlags(std::uint64_t &dllFlags) const;
+		bool getNumberOfBaseRelocationBlocks(std::uint64_t &relocs) const;
+		bool getNumberOfRelocations(std::uint64_t &relocs) const;
+		bool getDataDirectoryRelative(std::uint64_t index, std::uint64_t &relAddr, std::uint64_t &size) const;
+		bool getDataDirectoryAbsolute(std::uint64_t index, std::uint64_t &absAddr, std::uint64_t &size) const;
+		bool getComDirectoryRelative(std::uint64_t &relAddr, std::uint64_t &size) const;
 		const PeCoffSection* getPeSection(const std::string &secName) const;
-		const PeCoffSection* getPeSection(unsigned long long secIndex) const;
+		const PeCoffSection* getPeSection(std::uint64_t secIndex) const;
 		const CLRHeader* getCLRHeader() const;
 		const MetadataHeader* getMetadataHeader() const;
 		const MetadataStream* getMetadataStream() const;
@@ -218,7 +206,8 @@ class PeFormat : public FileFormat
 		const std::string& getTypeRefhashMd5() const;
 		const std::string& getTypeRefhashSha256() const;
 		const VisualBasicInfo* getVisualBasicInfo() const;
-		/// @}
+		std::vector<std::tuple<const std::uint8_t*, std::size_t>> getDigestRanges() const;
+		PeTimestamps getTimestamps() const;
 
 		/// @name Scanning methods
 		/// @{

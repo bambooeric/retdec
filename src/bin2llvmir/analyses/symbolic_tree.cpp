@@ -4,7 +4,6 @@
  * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
 
-#include <iostream>
 #include <ostream>
 #include <sstream>
 
@@ -709,8 +708,16 @@ bool SymbolicTree::_trackOnlyFlagRegisters = false;
 bool SymbolicTree::_simplifyAtCreation = true;
 unsigned SymbolicTree::_naryLimit = 3;
 
+void SymbolicTree::clear()
+{
+	_abi = nullptr;
+	_config = nullptr;
+	setToDefaultConfiguration();
+}
+
 void SymbolicTree::setToDefaultConfiguration()
 {
+	_val2valUsed = false;
 	_trackThroughAllocaLoads = true;
 	_trackThroughGeneralRegisterLoads = true;
 	_trackOnlyFlagRegisters = false;

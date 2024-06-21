@@ -81,8 +81,8 @@ FileImage::FileImage(
 			arch,
 			endian,
 			c.architecture.getByteSize(),
-			c.getEntryPoint(),
-			c.getSectionVMA());
+			c.parameters.getEntryPoint(),
+			c.parameters.getSectionVMA());
 
 	if (auto* imgRaw = dynamic_cast<retdec::loader::RawDataImage*>(
 			_image.get()))
@@ -98,7 +98,10 @@ FileImage::FileImage(
 		throw std::runtime_error("Missing basic info about input file"
 				" -> there can be no decompilation");
 	}
+}
 
+void FileImage::initRtti(Config* config)
+{
 	if (config->getConfig().tools.isMsvc())
 	{
 		_rtti.findMsvc(getImage());
@@ -504,7 +507,7 @@ llvm::Constant* FileImage::getConstant(
 			refGvs.push_back(newGv);
 			addr += Abi::getTypeByteSize(_module, Abi::getDefaultType(_module));
 
-			static auto& conf = config->getConfig();
+			auto& conf = config->getConfig();
 			if (conf.globals.getObjectByAddress(addr))
 			{
 				break;

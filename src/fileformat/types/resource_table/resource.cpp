@@ -6,11 +6,11 @@
 
 #include <algorithm>
 
-#include "retdec/crypto/crypto.h"
 #include "retdec/utils/conversion.h"
 #include "retdec/fileformat/file_format/file_format.h"
 #include "retdec/fileformat/types/resource_table/resource.h"
 #include "retdec/fileformat/utils/conversions.h"
+#include "retdec/fileformat/utils/crypto.h"
 #include "retdec/fileformat/utils/file_io.h"
 #include "retdec/fileformat/utils/other.h"
 
@@ -337,6 +337,17 @@ void Resource::setSublanguageId(std::size_t rId)
 }
 
 /**
+ * @brief Checks if the offset is valid, with UINT32_MAX reserved as invalid
+ *
+ * @return true
+ * @return false
+ */
+bool Resource::isValidOffset() const
+{
+	return offset != UINT32_MAX;
+}
+
+/**
  * A method which indicates whether resource is loaded.
  * @return `true` if it is, otherwise `false`.
  */
@@ -428,9 +439,9 @@ void Resource::load(const FileFormat *rOwner)
 
 	if (!(rOwner->getLoadFlags() & LoadFlags::NO_VERBOSE_HASHES))
 	{
-		crc32 = retdec::crypto::getCrc32(origBytes, bytes.size());
-		md5 = retdec::crypto::getMd5(origBytes, bytes.size());
-		sha256 = retdec::crypto::getSha256(origBytes, bytes.size());
+		crc32 = retdec::fileformat::getCrc32(origBytes, bytes.size());
+		md5 = retdec::fileformat::getMd5(origBytes, bytes.size());
+		sha256 = retdec::fileformat::getSha256(origBytes, bytes.size());
 	}
 }
 

@@ -5,6 +5,24 @@
 
 import "pe"
 
+rule advanced_installer
+{
+	meta:
+		tool = "I"
+		name = "Advanced Installer"
+		strength = "high"
+	strings:
+		$s00 = "ADVINSTSFX"
+		$s01 = "Software\\Caphyon\\Advanced Installer\\"
+		$s02 = "Detected working Internet connection." wide
+		$s03 = "<< Advanced Installer (x86) Log >>" wide
+		$s04 = "=====================End of Log=====================" wide
+		$s05 = "REINSTALL=ALL REINSTALLMODE=vomus" wide
+	condition:
+		pe.number_of_sections == 5 and
+		all of them
+}
+
 rule arc_sfx {
 	meta:
 		tool = "I"
@@ -14,6 +32,303 @@ rule arc_sfx {
 		$1 = { 8C C8 8C DB 8E D8 8E C0 89 ?? ?? ?? 2B C3 A3 ?? ?? 89 ?? ?? ?? BE ?? ?? B9 ?? ?? BF ?? ?? BA ?? ?? FC AC 32 C2 8A D8 }
 	condition:
 		$1 at pe.entry_point
+}
+
+private rule astrum_strings {
+	strings:
+		$1 = "Astrum Installer package #"
+		$2 = "AstrumInstaller"
+	condition:
+		all of them
+}
+
+rule astrum_uv_01 {
+	meta:
+		tool = "I"
+		name = "Astrum"
+		pattern = "558BEC83EC0C535657BE28774700FF75088BCEE8B13700008BCEE87E0B00008BCEE86413000085C07D1533DB8BCE"
+	strings:
+		$fixed1 = { 55 8B EC 83 EC 0C 53 56 57 }
+		$fixed2 = { E8 ?? ?? 00 00 8B CE E8 ?? ?? 00 00 8B CE E8 ?? ?? 00 00 85 C0 7D 15 33 DB 8B CE }
+		$s1 = { BE 28 77 47 00 FF 75 08 8B CE }
+		$s2 = { FF 15 ?? ?? ?? ?? FF 75 08 BE 18 88 47 00 8B CE }
+	condition:
+		all of ($fixed*) and
+		1 of ($s*) and
+		astrum_strings
+}
+
+rule astrum_uv_02 {
+	meta:
+		tool = "I"
+		name = "Astrum"
+		pattern = "6A4033C0598DBD????????F3AB66ABAA"
+	strings:
+		$1 = { 6A 40 33 C0 59 8D BD ?? ?? ?? ?? F3 AB 66 AB AA }
+	condition:
+		$1 and astrum_strings
+}
+
+rule create_install {
+	meta:
+		tool = "I"
+		name = "CreateInstall"
+	strings:
+		$s01 = "Gentee Launcher"
+	condition:
+		pe.sections[pe.number_of_sections - 2].name == ".gentee" and
+		pe.overlay.size != 0 and
+		pe.resources[pe.number_of_resources-1].type == pe.RESOURCE_TYPE_MANIFEST and
+		pe.resources[pe.number_of_resources-2].name_string == "S\x00E\x00T\x00U\x00P\x00_\x00I\x00C\x00O\x00N\x00" and   // "SETUP_ICON"
+		pe.resources[pe.number_of_resources-3].name_string == "S\x00E\x00T\x00U\x00P\x00_\x00T\x00E\x00M\x00P\x00" and   // "SETUP_TEMP"
+		all of them
+}
+
+rule fly_studio {
+	meta:
+		tool = "I"
+		name = "FlyStudio"
+	condition:
+		pe.overlay.size > 16 and
+		uint32(pe.overlay.offset) == 0x829ab7a5 and
+		uint32(pe.overlay.offset + 4) == 0x04 and
+		uint32(pe.overlay.offset + pe.overlay.size - 4) == 0x829ab7a5 and
+		pe.overlay.offset == filesize - uint32(pe.overlay.offset + pe.overlay.size - 8) - 0x08
+}
+
+rule gentee_installer {
+	meta:
+		tool = "I"
+		name = "GenteeInstaller"
+	strings:
+		$s01 = "Gentee installer"
+	condition:
+		pe.overlay.size > 16 and
+		uint32(0x3F0) == pe.overlay.offset and
+		(uint32(0x3F4) + uint32(0x3F8)) <= pe.overlay.size and
+		(uint32(pe.overlay.offset) == uint32(0x3F8)) and
+		$s01 at pe.sections[2].raw_data_offset
+}
+
+rule ghost_installer {
+	meta:
+		tool = "I"
+		name = "GhostInstaller"
+	strings:
+		$s01 = "GIPENDMSCF"
+	condition:
+		pe.number_of_sections == 3 and
+		pe.sections[0].name == "UPX0" and
+		pe.sections[1].name == "UPX1" and
+		pe.overlay.offset != 0 and
+		pe.overlay.size != 0 and
+		uint32(pe.overlay.offset) == 0x4643534D and
+		pe.resources[4].type == pe.RESOURCE_TYPE_DIALOG and
+		pe.resources[4].name_string == "D\x00L\x00G\x00_\x00I\x00N\x00P\x00U\x00T\x00Q\x00U\x00E\x00R\x00Y\x00S\x00T\x00R\x00" and
+		pe.resources[5].type == pe.RESOURCE_TYPE_DIALOG and
+  		pe.resources[5].name_string == "D\x00L\x00G\x00_\x00P\x00R\x00E\x00S\x00E\x00T\x00U\x00P\x00" and
+		all of them
+}
+
+rule install_creator {
+	meta:
+		tool = "I"
+		name = "InstallCreator"
+	strings:
+		$s01 = { 77 77 67 54 29 48 }
+	condition:
+		pe.number_of_sections == 3 and
+		pe.sections[0].name == "UPX0" and
+		pe.sections[1].name == "UPX1" and
+		pe.overlay.offset != 0 and
+		pe.overlay.size != 0 and
+		$s01 at pe.overlay.offset
+}
+
+rule ms_setup_installer_8x
+{
+	meta:
+		tool = "I"
+		name = "Microsoft Setup"
+		version = "8.x"
+		source = "Made by RetDec Team"
+		hash = "fb7363e3a2e114f57f34b377b984ecf3e4805398279f318d7cc394e1bfbbc561"
+	strings:
+		$s01 = "MsiInstallProduct returned '%d'"
+		$s02 = "AssemblyCheck: Error creating assembly name object"
+		$s03 = "Status of package '%s' after install is 'InstallNeeded'"
+		$s04 = "Running external check, and writing to log file '%s'" wide
+		$s05 = "Using MsiInstallProduct with package path '%s' and command line '%s'" wide
+	condition:
+		pe.number_of_sections == 3 and
+		for any resource in pe.resources : (resource.name_string == "S\x00E\x00T\x00U\x00P\x00C\x00F\x00G\x00") and
+		all of them
+}
+
+rule quick_batch_compiler_105 {
+	meta:
+		tool = "I"
+		name = "Quick Batch File Compiler"
+		version = "1.0.0.0 - 1.0.5.5"
+	strings:
+		$h01 = { 31 2E 32 34 00 55 50 58 21 0C 09  }  // UPX signature
+		$h02 = { 2E 66 FE FF 04 10 40 00 03 07 42 6F 6F 6C 65 61 6E 01 00 04 15 FF DD F6 FF 05 46 61 6C 73 65 04 54 72 75 65 8D 0D 2C 11 01 07 49 6E 74 65 67 65 }  // The begin of the UPX section
+		$s01 = "OnAskForKey"
+		$s02 = "OFTWARE\\Borland\\Delphi\\RTL"
+	condition:
+		pe.overlay.offset >= 0xD000 and
+		uint32(pe.overlay.offset + pe.overlay.size - 4) == pe.overlay.size and
+		pe.number_of_sections == 3 and
+		pe.sections[0].name == "UPX0" and
+		pe.sections[1].name == "UPX1" and
+		pe.timestamp == 0x2A425E19 and
+		all of them
+}
+
+rule quick_batch_compiler_106 {
+	meta:
+		tool = "I"
+		name = "Quick Batch File Compiler"
+		version = "1.0.6.0+"
+	strings:
+		$h01 = { 55 8B EC B9 07 00 00 00 6A 00 6A 00 49 75 F9  }  // Entry point code
+		$s01 = "SOFTWARE\\Borland\\Delphi\\RTL"
+		$s02 = "Compressed file is corrupt"
+		$s03 = "Quick Batch File Compiler"
+	condition:
+		pe.overlay.offset >= 0x23000 and
+		uint32(pe.overlay.offset + pe.overlay.size - 4) == pe.overlay.size and
+		pe.number_of_sections == 8 and
+		pe.sections[0].name == "CODE" and
+		pe.sections[1].name == "DATA" and
+		pe.timestamp == 0x2A425E19 and
+		$h01 at pe.entry_point and
+		all of them
+}
+
+rule quick_batch_compiler_2xx {
+	meta:
+		tool = "I"
+		name = "Quick Batch File Compiler"
+		version = "2.0.0.0 - 2.1.7.0"
+	strings:
+		$h01 = { 55 8B EC B9 ?? 00 00 00 6A 00 6A 00 49 75 F9  }  // Entry point code
+		$h02 = { FF FF FF FF 10 00 00 00 46 69 6C 65 20 69 73 20 63 6F 72 72 75 70 74 2E 00 00 00 00 }                 // Delphi: "File is corrupt."
+		$h03 = { FF FF FF FF 1A 00 00 00 43 6F 6D 70 72 65 73 73 65 64 20 66 69 6C 65 20 69 73 20 63 6F 72 72 75 70 }  // Delphi: "Compressed file is corrupt"
+		$h04 = { FF FF FF FF 19 00 00 00 51 75 69 63 6B 20 42 61 74 63 68 20 46 69 6C 65 20 43 6F 6D 70 69 6C 65 72 }  // Delphi: "Quick Batch File Compiler"
+		$s05 = "TMultiReadExclusiveWriteSynchronizer"
+	condition:
+		pe.overlay.offset >= 0x1F000 and
+		uint32(pe.overlay.offset + pe.overlay.size - 4) == pe.overlay.size and
+		pe.number_of_sections == 8 and
+		pe.sections[0].name == "CODE" and
+		pe.sections[1].name == "DATA" and
+		pe.timestamp == 0x2A425E19 and
+		$h01 at pe.entry_point and
+		all of them
+}
+
+rule quick_batch_compiler_300 {
+	meta:
+		tool = "I"
+		name = "Quick Batch File Compiler"
+		version = "3.0.0.0 - 3.1.6.0"
+	strings:
+		$h01 = { 55 8B EC B9 ?? 00 00 00 6A 00 6A 00 49 75 F9  }  // Entry point code
+		$h02 = { FF FF FF FF 1A 00 00 00 43 6F 6D 70 72 65 73 73 65 64 20 66 69 6C 65 20 69 73 20 63 6F 72 72 75 70 }  // Delphi: "Compressed file is corrupt"
+		$s03 = "TResourceStreamSV"
+		$s04 = "PADDINGXXPADDING"
+	condition:
+		0x5000 <= filesize and filesize < 300KB and
+		pe.number_of_sections == 8 and
+		pe.sections[0].name == "CODE" and
+		pe.sections[1].name == "DATA" and
+		pe.timestamp == 0x2A425E19 and
+		$h01 at pe.entry_point and
+		@s04 > pe.sections[7].raw_data_offset and
+		all of them
+}
+
+rule quick_batch_compiler_320 {
+	meta:
+		tool = "I"
+		name = "Quick Batch File Compiler"
+		version = "3.2.0.0"
+	strings:
+		$h01 = { 55 8B EC B9 ?? 00 00 00 6A 00 6A 00 49 75 F9  }  // Entry point code
+		$h02 = { FF FF FF FF 19 00 00 00 51 75 69 63 6B 20 42 61 74 63 68 20 46 69 6C 65 20 43 6F 6D 70 69 6C 65 72 00 00 00 }  // Delphi: "Quick Batch File Compiler"
+		$h03 = { FF FF FF FF 0F 00 00 00 63 6F 6D 6D 61 6E 64 2E 63 6F 6D 20 2F 63 20 00 }                                      // Delphi: "command.com /c"
+		$h04 = { 50 41 44 44 49 4E 47 58 58 50 41 44 44 49 4E 47 }  // "PADDINGXXPADDING"
+		$h05 = { 63 6D 64 6C 6E 00 00 00 } // "cmdln\0\0\0"
+	condition:
+		0x5000 <= filesize and filesize < 300KB and
+		pe.number_of_sections == 8 and
+		pe.sections[0].name == "CODE" and
+		pe.sections[1].name == "DATA" and
+		pe.timestamp == 0x2A425E19 and
+		$h01 at pe.entry_point and
+		@h04 > pe.sections[7].raw_data_offset and
+		all of them
+}
+
+rule quick_batch_compiler_321 {
+	meta:
+		tool = "I"
+		name = "Quick Batch File Compiler"
+		version = "3.2.1.0+"
+	strings:
+		$res_name01 = "RTFM" wide
+		$res_name02 = "SCRIPT" wide
+		$h01 = { 55 8B EC B9 ?? 00 00 00 6A 00 6A 00 49 75 F9  }    // Entry point code
+		$h02 = { FF FF FF FF 57 00 00 00 46 61 73 74 4D 4D 20 42 6F 72 6C 61 6E 64 20 45 64 69 74 69 6F 6E 20 A9 20 }  // Delphi: "FastMM Borland Edition (c) 2004"
+		$h03 = { 50 41 44 44 49 4E 47 58 58 50 41 44 44 49 4E 47 }  // "PADDINGXXPADDING"
+		$h04 = { 63 6D 64 6C 6E 00 00 00 } // "cmdln\0\0\0"
+	condition:
+		0x5000 <= filesize and filesize < 300KB and
+		pe.number_of_sections == 9 and
+		pe.sections[0].name == ".text" and
+		pe.sections[1].name == ".itext" and
+		$h01 at pe.entry_point and
+		@h03 > pe.sections[7].raw_data_offset and
+		any of ($res_name*) and
+		all of ($h*)
+}
+
+rule quick_batch_compiler_4xx {
+	meta:
+		tool = "I"
+		name = "Quick Batch File Compiler"
+		version = "4.0.0.0+"
+	strings:
+		$h01 = { FF FF FF FF 3A 00 00 00 46 61 73 74 4D 4D 20 45 6D 62 61 72 63 61 64 65 72 6F 20 45 64 69 74 69 6F }  // Delphi: "FastMM Embarcadero Edition (c) 2004"
+		$h02 = { FF FF FF FF 18 00 00 00 78 66 74 6A 73 72 6A 73 75 79 68 65 77 33 35 33 79 34 35 79 33 65 34 72 00 }  // Delphi: "xftjsrjsuyhew353y45y3e4r"
+		$s03 = "In order to correctly identify malware while avoiding false positives, antivirus manufacturers shalldetect the presence of Quick Batch File Compiler label" wide
+		$s04 = "PADDINGXXPADDING"
+		$s05 = "QUICKBFC" wide
+	condition:
+		pe.number_of_sections >= 8 and
+		pe.sections[0].name == ".text" and
+		pe.timestamp != 0x2A425E19 and
+		@s03 > pe.sections[7].raw_data_offset and
+		all of them
+}
+
+rule quick_batch_compiler_5xx {
+	meta:
+		tool = "I"
+		name = "Quick Batch File Compiler"
+		version = "5.0.0.0+"
+	strings:
+		$s01 = "compiler.environment"
+		$s02 = "In order to correctly identify malware while avoiding false positives, antivirus manufacturers shalldetect the presence of Quick Batch File Compiler label" wide
+		$s03 = "Encrypted user script: Resource Name: SCRIPT, Resource Type: RC DATA" wide
+		$s04 = "QUICKBFC" wide
+	condition:
+		pe.number_of_sections >= 8 and
+		pe.sections[0].name == ".text" and
+		pe.timestamp != 0x2A425E19 and
+		@s03 > pe.sections[7].raw_data_offset and
+		all of them
 }
 
 rule kgb_sfx {
@@ -110,6 +425,88 @@ rule exemplar_installer {
 		$1 at pe.entry_point
 }
 
+rule pyinstaller_27
+{
+	meta:
+		tool = "I"
+		name = "PyInstaller"
+		version = "2.7"
+		strength = "high"
+	strings:
+		$s00 = "Cannot GetProcAddress for PySys_SetObject"
+		$s01 = "Error coping %s"
+		$s02 = "Error loading Python DLL: %s (error code %d)"
+		$s03 = "PYTHONHOME"
+	condition:
+		pe.number_of_resources > 0 and
+		@s00 < pe.sections[2].raw_data_offset and
+		all of them
+}
+
+private rule pyinstaller_3x_strings
+{
+	strings:
+		$s00 = "Error loading Python DLL '%s'."
+		$s01 = "Cannot open self %s or archive %s"
+		$s02 = "Cannot open PyInstaller archive from executable (%s) or external archive (%s)"
+		$s10 = /PyInstalle(m|r): FormatMessageW failed\./
+		$s11 = /PyInstalle(m|r): pyi_win32_utils_to_utf8 failed\./
+	condition:
+		pe.number_of_sections > 0 and
+		any of ($s0*) and
+		all of ($s1*)
+}
+
+private rule pyinstaller_3x_overlay
+{
+	strings:
+		$s01 = { 4D 45 49 0C 0B 0A 0B 0E }      // PyInstaller magic number
+		$s02 = /PYZ\-\d\d\.pyz/
+		$s03 = /python3\d{1,2}\.dll/
+	condition:
+		pe.overlay.offset > 0 and
+		@s02 > pe.overlay.offset and
+		@s03 > pe.overlay.offset and
+		all of them
+}
+
+rule pyinstaller_3x
+{
+	meta:
+		tool = "I"
+		name = "PyInstaller"
+		version = "3.x"
+		strength = "high"
+	condition:
+		pyinstaller_3x_overlay and
+		pyinstaller_3x_strings
+}
+
+rule pyinstaller_3x_empty
+{
+	meta:
+		tool = "I"
+		name = "PyInstaller (no data)"
+		version = "3.x"
+		strength = "high"
+	condition:
+		pe.overlay.size == 0 and
+		pyinstaller_3x_strings
+}
+
+rule pyinstaller_3x_corrupt
+{
+	meta:
+		tool = "I"
+		name = "PyInstaller (corrupt)"
+		version = "3.x"
+		strength = "high"
+	condition:
+		pe.overlay.size > 0 and
+		pyinstaller_3x_strings and
+		not pyinstaller_3x_overlay
+}
+
 rule installanywhere_61 {
 	meta:
 		tool = "I"
@@ -156,18 +553,6 @@ rule installshield_uv_3 {
 		$1 at pe.entry_point
 }
 
-rule installshield_uv_04 {
-	meta:
-		tool = "I"
-		name = "InstallShield"
-		source = "Made by Retdec Team"
-		pattern = "558BEC6AFF68????4?0068????4?0064A100000000506489250000000083EC585356578965E8FF15????4?0033D28AD48915????4?008BC881E1FF000000890D????4?00C1E10803CA890D????4?00C1E810A3????4?00??????????0?00"
-	strings:
-		$1 = { 55 8B EC 6A FF 68 ?? ?? 4? 00 68 ?? ?? 4? 00 64 A1 00 00 00 00 50 64 89 25 00 00 00 00 83 EC 58 53 56 57 89 65 E8 FF 15 ?? ?? 4? 00 33 D2 8A D4 89 15 ?? ?? 4? 00 8B C8 81 E1 FF 00 00 00 89 0D ?? ?? 4? 00 C1 E1 08 03 CA 89 0D ?? ?? 4? 00 C1 E8 10 A3 ?? ?? 4? 00 ?? ?? ?? ?? ?? 0? 00 }
-	condition:
-		$1 at pe.entry_point
-}
-
 rule installshield_uv_05 {
 	meta:
 		tool = "I"
@@ -176,18 +561,6 @@ rule installshield_uv_05 {
 		pattern = "558BEC83EC4456FF15???141008BF085F675086AFFFF15???141008A06578B3D???241003C22751B56FFD78BF08A063C22740484C075F1803E22751556FFD78BF0EB0E3C207E0A56FFD78BF0803E207FF68A0684C074043C207EE18365E8008D45BC50FF"
 	strings:
 		$1 = { 55 8B EC 83 EC 44 56 FF 15 ?? ?1 41 00 8B F0 85 F6 75 08 6A FF FF 15 ?? ?1 41 00 8A 06 57 8B 3D ?? ?2 41 00 3C 22 75 1B 56 FF D7 8B F0 8A 06 3C 22 74 04 84 C0 75 F1 80 3E 22 75 15 56 FF D7 8B F0 EB 0E 3C 20 7E 0A 56 FF D7 8B F0 80 3E 20 7F F6 8A 06 84 C0 74 04 3C 20 7E E1 83 65 E8 00 8D 45 BC 50 FF }
-	condition:
-		$1 at pe.entry_point
-}
-
-rule installshield_2000 {
-	meta:
-		tool = "I"
-		name = "InstallShield"
-		version = "2000"
-		pattern = "558BEC6AFF68????????68????????64A1????????50648925????????83C4??535657"
-	strings:
-		$1 = { 55 8B EC 6A FF 68 ?? ?? ?? ?? 68 ?? ?? ?? ?? 64 A1 ?? ?? ?? ?? 50 64 89 25 ?? ?? ?? ?? 83 C4 ?? 53 56 57 }
 	condition:
 		$1 at pe.entry_point
 }
@@ -262,16 +635,57 @@ rule sentinel_641_superpro_automatic_protection {
 		$1 at pe.entry_point
 }
 
-rule setup_factory_6003 {
+rule setup_factory_install_package {
 	meta:
 		tool = "I"
 		name = "Setup Factory"
-		version = "6.0.0.3 Setup Launcher"
-		pattern = "558BEC6AFF689061400068703B400064A100000000506489250000000083EC585356578965E8FF151461400033D28AD489155C8940008BC881E1FF000000890D58894000C1E10803CA890D54894000C1E810A35089400033F656E8E00000005985C075086A1CE8B0000000598975FCE8E60F0000FF1510614000A3408E4000E8A40E0000A390894000E84D0C0000E88F0B0000E822FEFFFF8975D08D45A450FF150C614000E820"
+		version = "Installer Package"
 	strings:
-		$1 = { 55 8B EC 6A FF 68 90 61 40 00 68 70 3B 40 00 64 A1 00 00 00 00 50 64 89 25 00 00 00 00 83 EC 58 53 56 57 89 65 E8 FF 15 14 61 40 00 33 D2 8A D4 89 15 5C 89 40 00 8B C8 81 E1 FF 00 00 00 89 0D 58 89 40 00 C1 E1 08 03 CA 89 0D 54 89 40 00 C1 E8 10 A3 50 89 40 00 33 F6 56 E8 E0 00 00 00 59 85 C0 75 08 6A 1C E8 B0 00 00 00 59 89 75 FC E8 E6 0F 00 00 FF 15 10 61 40 00 A3 40 8E 40 00 E8 A4 0E 00 00 A3 90 89 40 00 E8 4D 0C 00 00 E8 8F 0B 00 00 E8 22 FE FF FF 89 75 D0 8D 45 A4 50 FF 15 0C 61 40 00 E8 20 }
+		$s1 = { E0 E1 E2 E3 E4 E5 E6 E7 }
+		$s2 = { E0 E0 E1 E1 E2 E2 E3 E3 E4 E4 E5 E5 E6 E6 E7 E7 }
 	condition:
-		$1 at pe.entry_point
+		pe.overlay.size > 0x10 and
+		($s1 at pe.overlay.offset or $s2 at pe.overlay.offset)
+}
+
+rule setup_factory_install_app {
+	meta:
+		tool = "I"
+		name = "Setup Factory"
+		version = "Setup Launcher"
+	strings:
+		$s1 = "PKWARE Data Compression Library for Win32"
+		$s3 = "irsetup.dat"
+		$s4 = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\SharedDLLs"
+		$s5 = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\"
+	condition:
+		(
+			pe.version_info["CompanyName"] == "Indigo Rose Corporation" or
+			pe.version_info["LegalTrademarks"] == "Setup Factory is a trademark of Indigo Rose Corporation"
+		)
+		and
+		(
+			pe.version_info["FileDescription"] contains "Setup Factory 4." or
+			pe.version_info["ProductName"] contains "Setup Factory 5." or
+			pe.version_info["ProductName"] contains "Setup Factory 6." or
+			pe.version_info["ProductName"] contains "Setup Factory 8."
+		)
+		and
+		(
+			all of them
+		)
+}
+
+rule setup_factory_install_app_upx {
+	meta:
+		tool = "I"
+		name = "Setup Factory"
+		version = "Setup Launcher 7.0"
+	condition:
+		pe.number_of_sections == 3 and
+		pe.sections[0].name == "UPX0" and
+		pe.version_info["Comments"] == "Created with Setup Factory 7.0" and
+		pe.version_info["ProductName"] == "Setup Factory 7.0 Runtime"
 }
 
 rule setup2go {
@@ -283,6 +697,42 @@ rule setup2go {
 		$1 = { 5B 53 45 54 55 50 5F 49 4E 46 4F 5D 0D 0A 56 65 72 }
 	condition:
 		$1 at pe.entry_point
+}
+
+rule smart_install_maker_v4 {
+	meta:
+		tool = "I"
+		name = "Smart Install Maker"
+		version = "4.x"
+	strings:
+		$s01 = "Smart Install Maker" nocase
+		$s02 = "SMART INSTALL MAKER" nocase
+		$s03 = "c:\\delphi7\\Lib\\km\\KOL.pas"
+		$s04 = "TLZMADecompressor"
+		$s05 = "Can not create DIB section, error:"
+	condition:
+		pe.number_of_sections == 8 and
+		pe.sections[0].name == "CODE" and           // Delphi
+		pe.sections[1].name == "DATA" and
+		pe.overlay.size != 0 and
+		all of them
+}
+
+rule smart_install_maker_v5 {
+	meta:
+		tool = "I"
+		name = "Smart Install Maker"
+		version = "5.x"
+	strings:
+		$s01 = "Smart Install Maker" nocase
+		$s02 = "SMART INSTALL MAKER" nocase
+	condition:
+		pe.number_of_sections == 8 and
+		pe.sections[0].name == "CODE" and           // Delphi
+		pe.sections[1].name == "DATA" and
+		pe.overlay.size != 0 and
+		$s01 at pe.overlay.offset and
+		all of them
 }
 
 rule thinstall_uv {
@@ -453,6 +903,16 @@ rule thinstall_3348_3350_vs {
 		$1 at pe.entry_point
 }
 
+rule viseman {
+	meta:
+		tool = "I"
+		name = "Viseman Installer"
+	condition:
+		pe.overlay.offset != 0 and
+		pe.overlay.size > 4 and
+		uint32(pe.overlay.offset) == 0x56495345     // Reversed "VISE"
+}
+
 rule wise_installer_uv_01 {
 	meta:
 		tool = "I"
@@ -490,11 +950,48 @@ rule wise_installer_uv_04 {
 	meta:
 		tool = "I"
 		name = "Wise Installer"
-		pattern = "558BEC81EC780500005356BE04010000578D8594FDFFFF5633DB5053FF15342040008D8594FDFFFF56508D8594FDFFFF50FF15302040008B3D2C20400053536A03536A018D8594FDFFFF680000008050FFD783F8FF8945FC0F847B0100008D8590FCFFFF5056FF15282040008D8598FEFFFF50538D8590FCFFFF681030400050FF15242040005368800000006A0253538D8598FEFFFF680000004050FFD783F8FF8945F40F842F"
 	strings:
-		$1 = { 55 8B EC 81 EC 78 05 00 00 53 56 BE 04 01 00 00 57 8D 85 94 FD FF FF 56 33 DB 50 53 FF 15 34 20 40 00 8D 85 94 FD FF FF 56 50 8D 85 94 FD FF FF 50 FF 15 30 20 40 00 8B 3D 2C 20 40 00 53 53 6A 03 53 6A 01 8D 85 94 FD FF FF 68 00 00 00 80 50 FF D7 83 F8 FF 89 45 FC 0F 84 7B 01 00 00 8D 85 90 FC FF FF 50 56 FF 15 28 20 40 00 8D 85 98 FE FF FF 50 53 8D 85 90 FC FF FF 68 10 30 40 00 50 FF 15 24 20 40 00 53 68 80 00 00 00 6A 02 53 53 8D 85 98 FE FF FF 68 00 00 00 40 50 FF D7 83 F8 FF 89 45 F4 0F 84 2F }
+		$1 = { 55 8B EC 81 EC 78 05 00 00 53 56 BE 04 01 00 00 57 8D 85 94 FD FF FF 56 33 DB 50 53 FF 15 3? 20 40 00 8D 85 94 FD FF FF 56 50 8D 85 94 FD FF FF 50 FF 15 3? 20 40 00 8B 3D ?? 20 40 00 53 53 6A }
+		$2 = { 55 8b ec 81 ec 74 05 00 00 53 8d 85 98 fd ff ff 56 33 db 57 be 04 01 00 00 56 50 53 ff 15 b4 40 40 00 56 8d 85 98 fd ff ff 50 50 ff 15 8c 40 40 00 53 8d 8d 98 fd ff ff 53 6a 03 53 6a 01 68 00 }
+		$3 = { 55 8b ec 81 ec 7c 05 00 00 53 56 57 be 04 01 00 00 56 8d 85 90 fd ff ff 33 db 50 53 89 5d f4 ff 15 38 20 40 00 56 8d 85 90 fd ff ff 50 50 ff 15 34 20 40 00 8b 3d 30 20 40 00 53 53 6a 03 53 6a }
 	condition:
-		$1 at pe.entry_point
+		$1 at pe.entry_point or
+		$2 at pe.entry_point or
+		$3 at pe.entry_point
+}
+
+rule wise_installer_uv_05 {
+	meta:
+		tool = "I"
+		name = "Wise Installer"
+	strings:
+		$s01 = "WISE_SETUP_EXE_PATH=\"%s\""
+		$s02 = "Wise Installation"
+		$s03 = "WiseInitLangAlwaysPrompt"
+		$s04 = "Initializing Wise Installation Wizard..."
+	condition:
+		pe.number_of_sections == 5 and
+		pe.sections[3].name == ".WISE" and
+		all of them
+}
+
+rule wise_installer_uv_06 {
+	meta:
+		tool = "I"
+		name = "Wise Installer"
+	strings:
+		$h01 = { 64 a1 00 00 00 00 55 8b ec 6a ff 68 ?? ?? ?? ?? 68 ?? ?? ?? ?? 50 64 89 25 00 00 00 00 83 ec }
+		$h02 = { 55 8b ec 6a ff 68 ?? ?? ?? ?? 68 ?? ?? ?? ?? 64 a1 00 00 00 00 50 64 89 25 00 00 00 00 83 ec }
+		$s01 = "GLBSInstall"
+		$s02 = "System DLLs corrupt or missing."
+		$s03 = "Could not locate installer DLL."
+		$s04 = "WiseMain"
+		$s05 = "Corrupt installation detected."
+		$s06 = "The installation file may be corrupt."
+	condition:
+		pe.number_of_sections >= 4 and
+		($h01 at pe.entry_point or $h02 at pe.entry_point) and
+		4 of ($s*)
 }
 
 rule wise_installer_110 {
@@ -531,6 +1028,24 @@ rule nsis_1xx_pimp {
 		$1 = { 83 EC 5C 53 55 56 57 FF 15 ?? ?? ?? 00 }
 	condition:
 		$1 at pe.entry_point
+}
+
+rule nsis_overlay_data {
+	meta:
+		tool = "I"
+		name = "Nullsoft Install System"
+	strings:
+		$s01 = { EF BE AD DE 6E 73 69 73 69 6E 73 74 61 6C 6C 00 }
+		$s02 = { ED BE AD DE 4E 75 6C 6C 53 6F 66 74 49 6E 73 74 }
+		$s03 = { 0? 00 00 00 EF BE AD DE 4E 75 6C 6C (53|73) 6F 66 74 49 6E 73 74 }
+	condition:
+		pe.number_of_sections > 3 and
+		pe.overlay.size != 0 and
+		(
+			@s01 >= pe.overlay.offset or
+			@s02 >= pe.overlay.offset or
+			@s03 >= pe.overlay.offset
+		)
 }
 
 rule nsis_13x_pimp {
@@ -895,60 +1410,40 @@ rule inno_12x {
 		$1 at pe.entry_point
 }
 
-rule inno_13x_1
+rule inno_13x
 {
 	meta:
 		tool = "I"
 		name = "Inno Setup"
 		version = "1.3.x"
 		source = "Made by Retdec Team"
-		pattern = "558BEC83C4C053565733C08945F08945C48945C0E84373FFFFE8F287FFFFE8E1A9FFFFE8A4F6FFFFE823FCFFFFBEF8FE400033C0556865C2400064FF3064892033D2556824C2400064FF326489228D55F033C0E8CCF3FFFF8B55F0B85CFC4000E80374FF"
-		strings:
-		$1 = { 55 8B EC 83 C4 C0 53 56 57 33 C0 89 45 F0 89 45 C4 89 45 C0 E8 43 73 FF FF E8 F2 87 FF FF E8 E1 A9 FF FF E8 A4 F6 FF FF E8 23 FC FF FF BE F8 FE 40 00 33 C0 55 68 65 C2 40 00 64 FF 30 64 89 20 33 D2 55 68 24 C2 40 00 64 FF 32 64 89 22 8D 55 F0 33 C0 E8 CC F3 FF FF 8B 55 F0 B8 5C FC 40 00 E8 03 74 FF }
+	strings:
+		$1 = { 55 8B EC 83 C4 C0 53 56 57 33 C0 89 45 F0 89 45 C4 89 45 C0 E8 43 73 FF FF E8 F2 87 FF FF E8 E1 A9 FF FF E8 A4 F6 FF FF E8 23 FC FF FF BE ?? FE 40 00 33 C0 55 68 65 C2 40 00 64 FF 30 64 89 20 33 D2 55 68 24 C2 40 00 64 FF 32 64 89 22 8D 55 F0 33 C0 E8 CC F3 FF FF 8B 55 F0 B8 ?? ?? 40 00 E8 03 74 FF }
+		$2 = { 55 8B EC 83 C4 B8 53 56 57 33 C0 89 45 F0 89 45 BC 89 45 B8 E8 C3 71 FF FF E8 72 86 FF FF E8 89 A8 FF FF E8 4C F5 FF FF E8 CB FA FF FF BE 78 FE 40 00 33 C0 55 68 51 C4 40 00 64 FF 30 64 89 20 33 D2 55 68 10 C4 40 00 64 FF 32 64 89 22 8D 55 F0 33 C0 E8 74 F2 FF FF 8B 55 F0 B8 DC FB 40 00 E8 83 72 FF }
+		$3 = { 55 8B EC 83 C4 C0 53 56 57 33 C0 89 45 F0 89 45 C4 89 45 C0 E8 43 73 FF FF E8 F2 87 FF FF E8 E1 A9 FF FF E8 A4 F6 FF FF E8 23 FC FF FF BE 74 FE 40 00 33 C0 55 68 65 C2 40 00 64 FF 30 64 89 20 33 D2 55 68 24 C2 40 00 64 FF 32 64 89 22 8D 55 F0 33 C0 E8 CC F3 FF FF 8B 55 F0 B8 D8 FB 40 00 E8 03 74 FF }
 	condition:
-		$1 at pe.entry_point
+		$1 at pe.entry_point or
+		$2 at pe.entry_point or
+		$3 at pe.entry_point
 }
 
-rule inno_13x_2
+rule inno_overlay
 {
 	meta:
 		tool = "I"
 		name = "Inno Setup"
-		version = "1.3.x"
+		version = "1.3.x overlay"
 		source = "Made by Retdec Team"
-		pattern = "558BEC83C4B853565733C08945F08945BC8945B8E8C371FFFFE87286FFFFE889A8FFFFE84CF5FFFFE8CBFAFFFFBE78FE400033C0556851C4400064FF3064892033D2556810C4400064FF326489228D55F033C0E874F2FFFF8B55F0B8DCFB4000E88372FF"
-		strings:
-		$1 = { 55 8B EC 83 C4 C0 53 56 57 33 C0 89 45 F0 89 45 C4 89 45 C0 E8 43 73 FF FF E8 F2 87 FF FF E8 E1 A9 FF FF E8 A4 F6 FF FF E8 23 FC FF FF BE 74 FE 40 00 33 C0 55 68 65 C2 40 00 64 FF 30 64 89 20 33 D2 55 68 24 C2 40 00 64 FF 32 64 89 22 8D 55 F0 33 C0 E8 CC F3 FF FF 8B 55 F0 B8 D8 FB 40 00 E8 03 74 FF }
+	strings:
+		$1 = { 55 8B EC 83 C4 ?? 53 56 57 33 C0 89 45 ?? 89 45 }
 	condition:
-		$1 at pe.entry_point
-}
-
-rule inno_13x_3
-{
-	meta:
-		tool = "I"
-		name = "Inno Setup"
-		version = "1.3.x"
-		source = "Made by Retdec Team"
-		pattern = "558BEC83C4B853565733C08945F08945BC8945B8E8C371FFFFE87286FFFFE889A8FFFFE84CF5FFFFE8CBFAFFFFBE78FE400033C0556851C4400064FF3064892033D2556810C4400064FF326489228D55F033C0E874F2FFFF8B55F0B8DCFB4000E88372FF"
-		strings:
-		$1 = { 55 8B EC 83 C4 B8 53 56 57 33 C0 89 45 F0 89 45 BC 89 45 B8 E8 C3 71 FF FF E8 72 86 FF FF E8 89 A8 FF FF E8 4C F5 FF FF E8 CB FA FF FF BE 78 FE 40 00 33 C0 55 68 51 C4 40 00 64 FF 30 64 89 20 33 D2 55 68 10 C4 40 00 64 FF 32 64 89 22 8D 55 F0 33 C0 E8 74 F2 FF FF 8B 55 F0 B8 DC FB 40 00 E8 83 72 FF }
-	condition:
-		$1 at pe.entry_point
-}
-
-rule inno_13x_4
-{
-	meta:
-		tool = "I"
-		name = "Inno Setup"
-		version = "1.3.x"
-		source = "Made by Retdec Team"
-		pattern = "558BEC83C4C053565733C08945F08945C48945C0E84373FFFFE8F287FFFFE8E1A9FFFFE8A4F6FFFFE823FCFFFFBE74FE400033C0556865C2400064FF3064892033D2556824C2400064FF326489228D55F033C0E8CCF3FFFF8B55F0B8D8FB4000E80374FF"
-		strings:
-		$1 = { 55 8B EC 83 C4 C0 53 56 57 33 C0 89 45 F0 89 45 C4 89 45 C0 E8 43 73 FF FF E8 F2 87 FF FF E8 E1 A9 FF FF E8 A4 F6 FF FF E8 23 FC FF FF BE 74 FE 40 00 33 C0 55 68 65 C2 40 00 64 FF 30 64 89 20 33 D2 55 68 24 C2 40 00 64 FF 32 64 89 22 8D 55 F0 33 C0 E8 CC F3 FF FF 8B 55 F0 B8 D8 FB 40 00 E8 03 74 FF }
-	condition:
-		$1 at pe.entry_point
+		$1 at pe.entry_point and
+		pe.overlay.offset != 0 and
+		pe.overlay.size > 0x10 and
+		uint32(pe.overlay.offset) == 0x6B736469 and
+		uint32(pe.overlay.offset+0x04) == 0x1A323361 and
+		uint32(pe.overlay.offset+0x08) < filesize and
+		uint32(pe.overlay.offset+0x0C) == 0x1A626C7A
 }
 
 rule inno_2xx
@@ -1813,6 +2308,24 @@ rule inno_unicode_559
 		$1 = { 55 8B EC 83 C4 A4 53 56 57 33 C0 89 45 C4 89 45 C0 89 45 A4 89 45 D0 89 45 C8 89 45 CC 89 45 D4 89 45 D8 89 45 EC B8 44 01 41 00 E8 C8 4D FF FF 33 C0 55 68 BE 1E 41 00 64 FF 30 64 89 20 33 D2 55 68 7A 1E 41 00 64 FF 32 64 89 22 A1 48 5B 41 00 E8 0E D5 FF FF E8 5D D0 FF FF 80 3D DC 2A 41 00 00 74 0C }
 	condition:
 		$1 at pe.entry_point
+}
+
+rule inno_unicode_600
+{
+	meta:
+		tool = "I"
+		name = "Inno Setup"
+		version = "6.0.0"
+		extra = "unicode version"
+		source = "Made by Retdec Team"
+		pattern = "558BEC83C4A453565733C08945C48945C08945A48945D08945C88945CC8945D48945D88945ECB8D8104B00E8B072F5FF33C05568DE654B0064FF3064892033D2"
+	strings:
+		$s01 = { 55 8b ec 83 c4 a4 53 56 57 33 c0 89 45 c4 89 45 c0 89 45 a4 89 45 d0 89 45 c8 89 45 cc 89 45 d4 89 45 d8 89 45 ec b8 d8 10 4b 00 e8 b0 72 f5 ff 33 c0 55 68 de 65 4b 00 64 ff 30 64 89 20 33 d2 }
+		$s10 = "Inno Setup Setup Data (6.0.0) (u)"
+		$s11 = "Inno Setup Messages (6.0.0) (u)"
+	condition:
+		$s01 at pe.entry_point and
+		all of ($s1*)
 }
 
 rule sevenzip_sfx_3xx_01
@@ -3055,7 +3568,7 @@ rule winrar_sfx_console_531
 rule winrar_sfx_console_540
 {
 	meta:
-	  tool = "I"
+		tool = "I"
 		name = "WinRAR SFX"
 		version = "5.40"
 		extra = "console version"
@@ -3082,142 +3595,52 @@ rule winrar_sfx_console_550
 		$1 at pe.entry_point
 }
 
-rule wix_toolset_36
+rule wix_toolset_3x
 {
 	meta:
-	  tool = "I"
+		tool = "I"
 		name = "WiX Toolset"
-		version = "3.6"
+		version = "3.x"
 		source = "Made by RetDec Team"
-		pattern = "E8AC140000E979FEFFFF8BFF558BEC8B45088B00813863736DE0752A8378100375248B40143D2005931974153D21059319740E3D2205931974073D004099017505E80115000033C05DC204006855474000FF157C11400033C0C38BFF558BEC57BFE80300"
 	strings:
-		$1 = { E8 AC 14 00 00 E9 79 FE FF FF 8B FF 55 8B EC 8B 45 08 8B 00 81 38 63 73 6D E0 75 2A 83 78 10 03 75 24 8B 40 14 3D 20 05 93 19 74 15 3D 21 05 93 19 74 0E 3D 22 05 93 19 74 07 3D 00 40 99 01 75 05 E8 01 15 00 00 33 C0 5D C2 04 00 68 55 47 40 00 FF 15 7C 11 40 00 33 C0 C3 8B FF 55 8B EC 57 BF E8 03 00 }
+		$s01 = ".wixburn"
+		$s02 = "Failed to find Burn section"
+		$s03 = "Failed to read section info, data to short: %u"
+		$h04 = {00 43 F1 00 02 00 00 00}	// Wix section header + version
 	condition:
-		$1 at pe.entry_point
+		for any section in pe.sections : ((section.name == ".wixburn") and ($h04 at section.raw_data_offset)) and
+		all of them
 }
 
-rule wix_toolset_37
+rule xt_app_launcher
 {
 	meta:
-	  tool = "I"
-		name = "WiX Toolset"
-		version = "3.7"
+		tool = "I"
+		name = "Xenocode Application Launcher"
 		source = "Made by RetDec Team"
-		pattern = "E81E1F0000E989FEFFFFCCCCCCCCCCCCCCCCCCCC8B54240C8B4C240485D2746933C08A44240884C0751681FA80000000720E833DE83E4500007405E97E1F0000578BF983FA047231F7D983E103740C2BD1880783C70183E90175F68BC8C1E00803C18BC8"
 	strings:
-		$1 = { E8 1E 1F 00 00 E9 89 FE FF FF CC CC CC CC CC CC CC CC CC CC 8B 54 24 0C 8B 4C 24 04 85 D2 74 69 33 C0 8A 44 24 08 84 C0 75 16 81 FA 80 00 00 00 72 0E 83 3D E8 3E 45 00 00 74 05 E9 7E 1F 00 00 57 8B F9 83 FA 04 72 31 F7 D9 83 E1 03 74 0C 2B D1 88 07 83 C7 01 83 E9 01 75 F6 8B C8 C1 E0 08 03 C1 8B C8 }
+		$h00 = { 8b 4f 3c 03 cf 0f b7 51 14 56 8d 74 0a 18 0f b7 51 06 33 c0 85 d2 76 16 8d 4e 10 8b 31 85 f6 74 07 8b 41 04 03 c6 03 c7 83 c1 28 4a 75 ed 2b c7 5e c3 }
+		$h01 = { 55 8b ec 51 8b 4f 3c 03 cf 0f b7 51 14 53 0f b7 59 06 33 c0 8d 54 0a 18 89 45 fc 3b d8 76 29 83 c2 14 56 8b 72 fc 85 f6 74 12 8b 0a 8d 04 0e 83 e1 11 }
 	condition:
-		$1 at pe.entry_point
+		pe.number_of_sections == 6 and
+		pe.sections[2].name == ".xcpad" and
+		pe.overlay.size != 0 and
+		any of them
 }
 
-rule wix_toolset_38
+rule inno_610
 {
-	meta:
-	  tool = "I"
-		name = "WiX Toolset"
-		version = "3.8"
-		source = "Made by RetDec Team"
-		pattern = "E8C9390000E97FFEFFFF3B0DD06045007502F3C3E9C4400000CCCC8B54240C8B4C240485D2747F0FB64424080FBA25447C450001730D8B4C240C578B7C2408F3AAEB5D8B54240C81FA800000007C0E0FBA2580614500010F8279410000578BF983FA0472"
-	strings:
-		$1 = { E8 C9 39 00 00 E9 7F FE FF FF 3B 0D D0 60 45 00 75 02 F3 C3 E9 C4 40 00 00 CC CC 8B 54 24 0C 8B 4C 24 04 85 D2 74 7F 0F B6 44 24 08 0F BA 25 44 7C 45 00 01 73 0D 8B 4C 24 0C 57 8B 7C 24 08 F3 AA EB 5D 8B 54 24 0C 81 FA 80 00 00 00 7C 0E 0F BA 25 80 61 45 00 01 0F 82 79 41 00 00 57 8B F9 83 FA 04 72 }
-	condition:
-		$1 at pe.entry_point
-}
-
-rule wix_toolset_39
-{
-	meta:
-	  tool = "I"
-		name = "WiX Toolset"
-		version = "3.9"
-		source = "Made by RetDec Team"
-		pattern = "E8FC390000E97FFEFFFF3B0D002046007502F3C3E985410000CCCCCCCC8B54240C8B4C240485D2747F0FB64424080FBA255C3F460001730D8B4C240C578B7C2408F3AAEB5D8B54240C81FA800000007C0E0FBA2560204600010F823A420000578BF983FA"
-	strings:
-		$1 = { E8 FC 39 00 00 E9 7F FE FF FF 3B 0D 00 20 46 00 75 02 F3 C3 E9 85 41 00 00 CC CC CC CC 8B 54 24 0C 8B 4C 24 04 85 D2 74 7F 0F B6 44 24 08 0F BA 25 5C 3F 46 00 01 73 0D 8B 4C 24 0C 57 8B 7C 24 08 F3 AA EB 5D 8B 54 24 0C 81 FA 80 00 00 00 7C 0E 0F BA 25 60 20 46 00 01 0F 82 3A 42 00 00 57 8B F9 83 FA }
-	condition:
-		$1 at pe.entry_point
-}
-
-rule wix_toolset_39r2
-{
-	meta:
-	  tool = "I"
-		name = "WiX Toolset"
-		version = "3.9r2"
-		source = "Made by RetDec Team"
-		pattern = "E8003A0000E97FFEFFFF3B0D002046007502F3C3E989410000CCCCCCCCCCCCCCCC8B54240C8B4C240485D2747F0FB64424080FBA255C3F460001730D8B4C240C578B7C2408F3AAEB5D8B54240C81FA800000007C0E0FBA2560204600010F823A42000057"
-	strings:
-		$1 = { E8 00 3A 00 00 E9 7F FE FF FF 3B 0D 00 20 46 00 75 02 F3 C3 E9 89 41 00 00 CC CC CC CC CC CC CC CC 8B 54 24 0C 8B 4C 24 04 85 D2 74 7F 0F B6 44 24 08 0F BA 25 5C 3F 46 00 01 73 0D 8B 4C 24 0C 57 8B 7C 24 08 F3 AA EB 5D 8B 54 24 0C 81 FA 80 00 00 00 7C 0E 0F BA 25 60 20 46 00 01 0F 82 3A 42 00 00 57 }
-	condition:
-		$1 at pe.entry_point
-}
-
-rule wix_toolset_310
-{
-	meta:
-	  tool = "I"
-		name = "WiX Toolset"
-		version = "3.10"
-		source = "Made by RetDec Team"
-		pattern = "E895030000E980FEFFFF3B0D04904600F27502F2C3F2E91F070000558BECEB1FFF7508E8AD6C00005985C07512837D08FF7507E8F6080000EB05E8D2080000FF7508E8246D00005985C074D45DC3558BECFF7508E8FF080000595DC3558BECF645080156"
-	strings:
-		$1 = { E8 95 03 00 00 E9 80 FE FF FF 3B 0D 04 90 46 00 F2 75 02 F2 C3 F2 E9 1F 07 00 00 55 8B EC EB 1F FF 75 08 E8 AD 6C 00 00 59 85 C0 75 12 83 7D 08 FF 75 07 E8 F6 08 00 00 EB 05 E8 D2 08 00 00 FF 75 08 E8 24 6D 00 00 59 85 C0 74 D4 5D C3 55 8B EC FF 75 08 E8 FF 08 00 00 59 5D C3 55 8B EC F6 45 08 01 56 }
-	condition:
-		$1 at pe.entry_point
-}
-
-rule wix_toolset_3101
-{
-	meta:
-	  tool = "I"
-		name = "WiX Toolset"
-		version = "3.10.1"
-		source = "Made by RetDec Team"
-		pattern = "E891030000E980FEFFFF3B0D04904600F27502F2C3F2E95B070000558BECEB1FFF7508E8C56C00005985C07512837D08FF7507E832090000EB05E80E090000FF7508E83C6D00005985C074D45DC3558BECFF7508E83B090000595DC3558BECF645080156"
-	strings:
-		$1 = { E8 91 03 00 00 E9 80 FE FF FF 3B 0D 04 90 46 00 F2 75 02 F2 C3 F2 E9 5B 07 00 00 55 8B EC EB 1F FF 75 08 E8 C5 6C 00 00 59 85 C0 75 12 83 7D 08 FF 75 07 E8 32 09 00 00 EB 05 E8 0E 09 00 00 FF 75 08 E8 3C 6D 00 00 59 85 C0 74 D4 5D C3 55 8B EC FF 75 08 E8 3B 09 00 00 59 5D C3 55 8B EC F6 45 08 01 56 }
-	condition:
-		$1 at pe.entry_point
-}
-
-rule wix_toolset_3102
-{
-	meta:
-	  tool = "I"
-		name = "WiX Toolset"
-		version = "3.10.2"
-		source = "Made by RetDec Team"
-		pattern = "E8A3040000E980FEFFFFCCCCCCCCCCCCCCCC8B4424088B4C24100BC88B4C240C75098B442404F7E1C2100053F7E18BD88B442408F764241403D88B442408F7E103D35BC21000558BECEB1FFF7508E86B6C00005985C07512837D08FF7507E8B3080000EB"
-	strings:
-		$1 = { E8 A3 04 00 00 E9 80 FE FF FF CC CC CC CC CC CC CC CC 8B 44 24 08 8B 4C 24 10 0B C8 8B 4C 24 0C 75 09 8B 44 24 04 F7 E1 C2 10 00 53 F7 E1 8B D8 8B 44 24 08 F7 64 24 14 03 D8 8B 44 24 08 F7 E1 03 D3 5B C2 10 00 55 8B EC EB 1F FF 75 08 E8 6B 6C 00 00 59 85 C0 75 12 83 7D 08 FF 75 07 E8 B3 08 00 00 EB }
-	condition:
-		$1 at pe.entry_point
-}
-
-rule wix_toolset_3103
-{
-	meta:
-	  tool = "I"
-		name = "WiX Toolset"
-		version = "3.10.3"
-		source = "Made by RetDec Team"
-		pattern = "E8C4040000E980FEFFFFCCCCCCCCCCCCCCCCCCCCCCCC8B4424088B4C24100BC88B4C240C75098B442404F7E1C2100053F7E18BD88B442408F764241403D88B442408F7E103D35BC21000558BECEB1FFF7508E87D6C00005985C07512837D08FF7507E813"
-	strings:
-		$1 = { E8 C4 04 00 00 E9 80 FE FF FF CC CC CC CC CC CC CC CC CC CC CC CC 8B 44 24 08 8B 4C 24 10 0B C8 8B 4C 24 0C 75 09 8B 44 24 04 F7 E1 C2 10 00 53 F7 E1 8B D8 8B 44 24 08 F7 64 24 14 03 D8 8B 44 24 08 F7 E1 03 D3 5B C2 10 00 55 8B EC EB 1F FF 75 08 E8 7D 6C 00 00 59 85 C0 75 12 83 7D 08 FF 75 07 E8 13 }
-	condition:
-		$1 at pe.entry_point
-}
-
-rule wix_toolset_311
-{
-	meta:
-	  tool = "I"
-		name = "WiX Toolset"
-		version = "3.11"
-		source = "Made by RetDec Team"
-		pattern = "E801050000E98EFEFFFFCCCCCCCCCCCCCCCCCC8B4424088B4C24100BC88B4C240C75098B442404F7E1C2100053F7E18BD88B442408F764241403D88B442408F7E103D35BC21000CCCCCCCCCCCCCCCCCCCCCCCC80F940731580F92073060FADD0D3EAC38B"
-	strings:
-		$1 = { E8 01 05 00 00 E9 8E FE FF FF CC CC CC CC CC CC CC CC CC 8B 44 24 08 8B 4C 24 10 0B C8 8B 4C 24 0C 75 09 8B 44 24 04 F7 E1 C2 10 00 53 F7 E1 8B D8 8B 44 24 08 F7 64 24 14 03 D8 8B 44 24 08 F7 E1 03 D3 5B C2 10 00 CC CC CC CC CC CC CC CC CC CC CC CC 80 F9 40 73 15 80 F9 20 73 06 0F AD D0 D3 EA C3 8B }
-	condition:
-		$1 at pe.entry_point
+         meta:
+                tool = "I"
+                name = "Inno Setup"
+                version = "6.1.0"
+                author = "Thomas Roccia"
+                pattern = "entry-point: 55 8B EC 83 C4 A4 53 56 57 33 C0 89 45 C4 89 45 C0 89 45 A4 89 45 D0 89 45 C8 89 45 CC 89 45 D4 89 "
+         strings:
+                $s1 = { 55 8B EC 83 C4 A4 53 56 57 33 C0 89 45 C4 89 45 C0 89 45 A4 89 45 D0 89 45 C8 89 45 CC 89 45 D4 89 }
+                $s2 = "Inno Setup Setup Data (6.1.0) (u)" fullword wide ascii
+                $s3 =  "Inno Setup Messages (6.0.0) (u)" fullword wide ascii
+         condition:
+                $s1 at pe.entry_point and
+                all of ($s*)
 }

@@ -12,7 +12,6 @@
 #include "retdec/bin2llvmir/optimizations/param_return/collector/collector.h"
 #include "retdec/bin2llvmir/optimizations/param_return/collector/pic32.h"
 
-using namespace retdec::utils;
 using namespace llvm;
 
 namespace retdec {
@@ -545,13 +544,14 @@ bool Collector::storesString(StoreInst* si, std::string& str) const
 	return true;
 }
 
-llvm::Value* Collector::getRoot(llvm::Value* i, bool first) const
+llvm::Value* Collector::getRoot(llvm::Value* i) const
 {
-	static std::set<llvm::Value*> seen;
-	if (first)
-	{
-		seen.clear();
-	}
+	std::set<llvm::Value*> seen;
+	return _getRoot(i, seen);
+}
+
+llvm::Value* Collector::_getRoot(llvm::Value* i, std::set<llvm::Value*>& seen) const
+{
 	if (seen.count(i))
 	{
 		return i;
@@ -568,7 +568,7 @@ llvm::Value* Collector::getRoot(llvm::Value* i, bool first) const
 				auto* d = (*u->defs.begin())->def;
 				if (auto* s = dyn_cast<StoreInst>(d))
 				{
-					return getRoot(s->getValueOperand(), false);
+					return _getRoot(s->getValueOperand(), seen);
 				}
 				else
 				{
@@ -577,7 +577,7 @@ llvm::Value* Collector::getRoot(llvm::Value* i, bool first) const
 			}
 			else if (auto* l = dyn_cast<LoadInst>(ii))
 			{
-				return getRoot(l->getPointerOperand(), false);
+				return _getRoot(l->getPointerOperand(), seen);
 			}
 			else
 			{
@@ -586,7 +586,7 @@ llvm::Value* Collector::getRoot(llvm::Value* i, bool first) const
 		}
 		else if (auto* l = dyn_cast<LoadInst>(ii))
 		{
-			return getRoot(l->getPointerOperand(), false);
+			return _getRoot(l->getPointerOperand(), seen);
 		}
 		else
 		{

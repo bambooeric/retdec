@@ -4,8 +4,6 @@
  * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
 
-#include <iostream>
-
 #include <llvm/IR/GlobalVariable.h>
 #include <llvm/IR/Module.h>
 
@@ -14,8 +12,8 @@
 #include "retdec/bin2llvmir/providers/demangler.h"
 #include "retdec/bin2llvmir/utils/debug.h"
 #include "retdec/bin2llvmir/utils/llvm.h"
+#include "retdec/utils/string.h"
 
-using namespace retdec::utils;
 using namespace llvm;
 
 namespace retdec {
@@ -27,59 +25,29 @@ namespace bin2llvmir {
 //=============================================================================
 //
 
-Config Config::empty(llvm::Module* m)
+retdec::config::Config _emptyConfig;
+
+Config::Config(retdec::config::Config& c)
+		: _configDB(c)
 {
-	Config config;
-	config._module = m;
-	return config;
+
 }
 
-Config Config::fromFile(llvm::Module* m, const std::string& path)
+Config Config::empty(llvm::Module* m)
 {
-	Config config;
+	_emptyConfig = retdec::config::Config();
+	Config config(_emptyConfig);
 	config._module = m;
-	config._configPath = path;
-	if (!config._configPath.empty())
-	{
-		// Can throw an exception, but it is catched by bin2llvmirl.
-		config._configDB.readJsonFile(config._configPath);
-	}
-
-	for (auto& s : config.getConfig().structures)
-	{
-		llvm_utils::stringToLlvmType(m->getContext(), s.getLlvmIr());
-	}
-
-	// TODO: needed?
-	if (config.getConfig().tools.isPic32())
-	{
-		config.getConfig().architecture.setIsPic32();
-	}
-
 	return config;
 }
 
 Config Config::fromConfig(llvm::Module* m, retdec::config::Config& c)
 {
-	Config config;
+	Config config(c);
 	config._module = m;
-	config._configDB = std::move(c);
 
-	// TODO: needed?
-	if (config.getConfig().tools.isPic32())
-	{
-		config.getConfig().architecture.setIsPic32();
-	}
-
-	return config;
-}
-
-Config Config::fromJsonString(llvm::Module* m, const std::string& json)
-{
-	Config config;
-	config._module = m;
-	config._configDB.readJsonString(json);
-
+	// Create all structures defined in the config.
+	//
 	for (auto& s : config.getConfig().structures)
 	{
 		llvm_utils::stringToLlvmType(m->getContext(), s.getLlvmIr());
@@ -102,9 +70,9 @@ void Config::doFinalization()
 {
 	tagFunctionsWithUsedCryptoGlobals();
 
-	if (!_configPath.empty())
+	if (!_configDB.parameters.getOutputConfigFile().empty())
 	{
-		_configDB.generateJsonFile(_configPath);
+		_configDB.generateJsonFile(_configDB.parameters.getOutputConfigFile());
 	}
 }
 
@@ -358,6 +326,7 @@ const retdec::common::Object* Config::insertGlobalVariable(
 		cgv.type.setIsWideString(true);
 	}
 	auto p = _configDB.globals.insert(cgv);
+
 	return &(*p.first);
 }
 
@@ -492,10 +461,10 @@ llvm::GlobalVariable* Config::getGlobalDummy()
 	return _globalDummy;
 }
 
-utils::FilesystemPath Config::getOutputDirectory()
+fs::path Config::getOutputDirectory()
 {
-	FilesystemPath fsp(getConfig().parameters.getOutputFile());
-	return fsp.getParentPath();
+	fs::path fsp(getConfig().parameters.getOutputFile());
+	return fs::canonical(fsp).parent_path();
 }
 
 void Config::setLlvmCallPseudoFunction(llvm::Function* f)
@@ -731,7 +700,6 @@ void Config::tagFunctionsWithUsedCryptoGlobals()
 		{
 			continue;
 		}
-
 		for (auto* user : lgv.users())
 		{
 			if (auto* i = dyn_cast_or_null<Instruction>(user))
@@ -769,20 +737,6 @@ std::map<llvm::Module*, Config> ConfigProvider::_module2config;
 Config* ConfigProvider::addConfig(llvm::Module* m, retdec::config::Config& c)
 {
 	auto p = _module2config.emplace(m, Config::fromConfig(m, c));
-	return &p.first->second;
-}
-
-Config* ConfigProvider::addConfigFile(llvm::Module* m, const std::string& path)
-{
-	auto p = _module2config.emplace(m, Config::fromFile(m, path));
-	return &p.first->second;
-}
-
-Config* ConfigProvider::addConfigJsonString(
-		llvm::Module* m,
-		const std::string& json)
-{
-	auto p = _module2config.emplace(m, Config::fromJsonString(m, json));
 	return &p.first->second;
 }
 

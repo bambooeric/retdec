@@ -228,6 +228,82 @@ rule aut2exe_33143 {
 		$1 at pe.entry_point
 }
 
+rule aut2exe_uv_01 {
+	meta:
+		tool = "C"
+		name = "Aut2Exe"
+		language = "AutoIt"
+		bytecode = true
+	strings:
+		$1 = ">AUTOIT SCRIPT<"
+		$2 = ">AUTOIT SCRIPT<" wide
+		$3 = ">AUTOIT UNICODE SCRIPT<" wide
+	condition:
+		pe.is_32bit() and
+		for 1 of them : (
+			@ > pe.sections[pe.section_index(".rdata")].raw_data_offset and
+			@ < pe.sections[pe.section_index(".rdata")].raw_data_offset +
+			pe.sections[pe.section_index(".rdata")].raw_data_size
+		)
+}
+
+rule aut2exe_3x
+{
+	meta:
+		tool = "C"
+		name = "Aut2Exe"
+		version = "3.x"
+		language = "AutoIt"
+    strings:
+        $s01 = "AU3!EA06"
+        $s02 = "AutoIt v3" wide
+        $s03 = ">>>AUTOIT SCRIPT<<<" wide
+        $h01 = { 60 be ?? ?? ?? ?? 8d be 00 ?? ?? ff 57 eb 0b 90 8a 06 46 88 07 47 01 db 75 07 8b 1e 83 ee fc 11 db 72 ed b8 01 00 00 00 01 db 75 07 8b 1e 83 ee fc 11 db 11 c0 01 db 73 0b 75 28 8b 1e 83 ee fc }
+        $h02 = { e8 ?? ?? 00 00 e9 7f fe ff ff cc cc cc cc cc cc cc cc cc cc cc cc cc cc cc  57 56 8b 74 24 10 8b 4c 24 14 8b 7c 24 0c 8b c1 8b d1 03 c6 3b fe 76 08 3b f8 0f 82 68 03 00 00 0f ba 25 58 ?? 4c 00 }
+    condition:
+		(
+			pe.number_of_resources < 0x80 and
+			for any i in (0 .. pe.number_of_resources):
+			(
+				pe.resources[i].type == 0x0A and          // RESOURCE_TYPE_RCDATA
+				pe.resources[i].name_string == "S\x00C\x00R\x00I\x00P\x00T\x00"
+			)
+			and all of ($s0*)
+		)
+		or $h01 at pe.entry_point
+		or $h02 at pe.entry_point
+}
+
+rule autohotkey_uv_01 {
+	meta:
+		tool = "C"
+		name = "AHK2Exe"
+		language = "AutoHotKey"
+		bytecode = true
+	strings:
+		$0 = "Hotkeys/hotstrings are not allowed inside functions." wide ascii
+		$1 = "IfWin should be #IfWin." wide ascii
+		$2 = "This hotstring is missing its abbreviation." wide ascii
+		$3 = "Duplicate hotkey." wide ascii
+		$4 = ">AUTOHOTKEY SCRIPT<" wide ascii
+    condition:
+        pe.is_32bit()
+		and
+		pe.number_of_resources > 0
+		and ((
+					(@4 > pe.sections[pe.section_index(".rdata")].raw_data_offset
+					and
+					@4 < pe.sections[pe.section_index(".rdata")].raw_data_offset +
+					pe.sections[pe.section_index(".rdata")].raw_data_size)
+				or
+				(for 1 i in (0 .. pe.number_of_resources) : (
+					pe.resources[i].name_string matches />AUTOHOTKEY SCRIPT</))
+			)
+			or
+			(3 of ($0,$1,$2,$3))
+		)
+}
+
 rule borland_c {
 	meta:
 		tool = "C"
@@ -1367,6 +1443,35 @@ rule purebasic_4x {
 		$1 at pe.entry_point
 }
 
+rule rust_compiler_32
+{
+	meta:
+		tool = "C"
+		name = "Rust (32-bit)"
+		version = "i686-pc-windows-msvc"
+	strings:
+		$s02 = "Local\\RustBacktraceMutex"
+	condition:
+		pe.data_directories[9].size != 0 and
+		uint8(pe.entry_point) == 0xE8 and uint8(pe.entry_point+5) == 0xE9 and
+		@s02 > pe.sections[1].raw_data_offset
+}
+
+rule rust_compiler_64
+{
+	meta:
+		tool = "C"
+		name = "Rust (64-bit)"
+		version = "x86_64-pc-windows-msvc"
+	strings:
+		$s01 = { 48 83 ec 28 E8 ?? ?? ?? ?? 48 83 c4 28 E9 ?? ?? ?? ?? CC CC}
+		$s02 = "Local\\RustBacktraceMutex"
+	condition:
+		pe.data_directories[9].size != 0 and
+		$s01 at pe.entry_point and
+		@s02 > pe.sections[1].raw_data_offset
+}
+
 rule symantec_c_zortech_c_210_400_30r1 {
 	meta:
 		tool = "C"
@@ -1911,89 +2016,22 @@ rule ms_fortran {
 		$1 at pe.entry_point
 }
 
-rule ms_visual_basic_50_60_01 {
+rule ms_visual_basic_60 {
 	meta:
 		tool = "C"
 		name = "Microsoft Visual Basic"
-		version = "5.0 - 6.0"
-		pattern = "68????????E8????????00000000000030000000"
-	strings:
-		$1 = { 68 ?? ?? ?? ?? E8 ?? ?? ?? ?? 00 00 00 00 00 00 30 00 00 00 }
-	condition:
-		$1 at pe.entry_point
+		version = "6.0"
+    condition:
+		pe.imports("msvbvm60.dll", 100) or pe.imports("msvbvm60.dll", "ThunRTMain")
 }
 
-rule ms_visual_basic_50_60_02 {
-	meta:
-		tool = "C"
-		name = "Microsoft Visual Basic"
-		version = "5.0 - 6.0"
-		pattern = "FF25????????????68????????E8??FFFFFF"
-	strings:
-		$1 = { FF 25 ?? ?? ?? ?? ?? ?? 68 ?? ?? ?? ?? E8 ?? FF FF FF }
-	condition:
-		$1 at pe.entry_point
-}
-
-rule ms_visual_basic_50_01 {
+rule ms_visual_basic_50 {
 	meta:
 		tool = "C"
 		name = "Microsoft Visual Basic"
 		version = "5.0"
-		pattern = "FFFFFF0000000000003000000040000000000000"
-		start = 7
-	strings:
-		$1 = { FF FF FF 00 00 00 00 00 00 30 00 00 00 40 00 00 00 00 00 00 }
 	condition:
-		$1 at pe.entry_point + 7
-}
-
-rule ms_visual_basic_50_02 {
-	meta:
-		tool = "C"
-		name = "Microsoft Visual Basic"
-		version = "5.0"
-		pattern = "FFFFFF0000000000003000000040000000000000"
-	strings:
-		$1 = { FF FF FF 00 00 00 00 00 00 30 00 00 00 40 00 00 00 00 00 00 }
-	condition:
-		$1 at pe.entry_point
-}
-
-rule ms_visual_basic_60_01 {
-	meta:
-		tool = "C"
-		name = "Microsoft Visual Basic"
-		version = "6.0"
-		pattern = "5A68????????68????????52E9????FF"
-	strings:
-		$1 = { 5A 68 ?? ?? ?? ?? 68 ?? ?? ?? ?? 52 E9 ?? ?? FF }
-	condition:
-		$1 at pe.entry_point
-}
-
-rule ms_visual_basic_60_02 {
-	meta:
-		tool = "C"
-		name = "Microsoft Visual Basic"
-		version = "6.0"
-		pattern = "5A68????????68????????52E9????????000000??00000030000000??000000??000000"
-	strings:
-		$1 = { 5A 68 ?? ?? ?? ?? 68 ?? ?? ?? ?? 52 E9 ?? ?? ?? ?? 00 00 00 ?? 00 00 00 30 00 00 00 ?? 00 00 00 ?? 00 00 00 }
-	condition:
-		$1 at pe.entry_point
-}
-
-rule ms_visual_basic_60_03 {
-	meta:
-		tool = "C"
-		name = "Microsoft Visual Basic"
-		version = "6.0"
-		pattern = "FF25????????68????????E8??FFFFFF????????????30"
-	strings:
-		$1 = { FF 25 ?? ?? ?? ?? 68 ?? ?? ?? ?? E8 ?? FF FF FF ?? ?? ?? ?? ?? ?? 30 }
-	condition:
-		$1 at pe.entry_point
+		pe.imports("msvbvm50.dll", 100) or pe.imports("msvbvm50.dll", "ThunRTMain")
 }
 
 rule dotnet_01 {
@@ -3341,6 +3379,43 @@ rule ocbat2exe {
 		$1 = { 55 8B EC B9 08 00 00 00 6A 00 6A 00 49 75 F9 53 56 57 B8 58 3C 40 00 E8 6C FA FF FF 33 C0 55 68 8A 3F 40 00 64 FF 30 64 89 20 6A 00 6A 00 6A 03 6A 00 6A 01 68 00 00 00 80 8D 55 EC 33 C0 E8 81 E9 FF FF 8B 45 EC E8 41 F6 FF FF 50 E8 F3 FA FF FF 8B F8 83 FF FF 0F 84 83 02 00 00 6A 02 6A 00 6A EE 57 E8 FC FA FF FF 6A 00 68 60 99 4F 00 6A 12 68 18 57 40 00 57 E8 E0 FA FF FF 83 3D 60 99 4F 00 12 0F 85 56 02 00 00 8D 45 E4 50 8D 45 E0 BA 18 57 40 00 B9 40 42 0F 00 E8 61 F4 FF FF 8B 45 E0 B9 12 00 00 00 BA 01 00 00 00 E8 3B F6 FF FF 8B 45 E4 8D 55 E8 E8 04 FB ?? ?? ?? ?? E8 B8 58 99 4F 00 E8 67 F3 FF FF 33 C0 A3 60 99 4F 00 8D 45 DC 50 B9 05 00 00 00 BA 01 00 00 00 A1 58 99 4F 00 E8 04 F6 FF FF 8B 45 DC BA A4 3F 40 00 E8 E3 F4 FF FF }
 	condition:
 		for any of them : ( $ at pe.entry_point )
+}
+
+rule f2ko_bat2exe_uv_01 {
+	meta:
+		tool = "C"
+		name = "F2KO Bat2Exe"
+		pattern = "68????0000680000000068????????E8????????83C40C6800000000E8????????A3????????680000000068001000006800000000E8????????A3"
+	strings:
+		$1 = { 68 ?? ?? 00 00 68 00 00 00 00 68 ?? ?? ?? ?? E8 ?? ?? ?? ?? 83 C4 0C 68 00 00 00 00 E8 ?? ?? ?? ?? A3 ?? ?? ?? ?? 68 00 00 00 00 68 00 10 00 00 68 00 00 00 00 E8 ?? ?? ?? ?? A3 }
+	condition:
+		$1 at pe.entry_point
+}
+
+rule adv_bat_to_exe_uv_01 {
+	meta:
+		tool = "C"
+		name = "Advanced BAT to EXE Converter"
+		pattern = "B94FC3000033C08DBD????????F3AB66ABAAA0????????8885????????B96918000033C08DBD????????F3AB66ABAA8A0D????????888D????????B94000000033C08DBD????????F3AB66ABAA8A15????????8895????????B95900000033C08D"
+	strings:
+		$1 = { B9 4F C3 00 00 33 C0 8D BD ?? ?? ?? ?? F3 AB 66 AB AA A0 ?? ?? ?? ?? 88 85 ?? ?? ?? ?? B9 69 18 00 00 33 C0 8D BD ?? ?? ?? ?? F3 AB 66 AB AA 8A 0D ?? ?? ?? ?? 88 8D ?? ?? ?? ?? B9 40 00 00 00 33 C0 8D BD ?? ?? ?? ?? F3 AB 66 AB AA 8A 15 ?? ?? ?? ?? 88 95 ?? ?? ?? ?? B9 59 00 00 00 33 C0 8D }
+	condition:
+		$1
+}
+
+rule exescript_uv_01 {
+	meta:
+		tool = "C"
+		name = "ExeScript"
+		pattern = "558BEC81EC????????566A00FF15????????8985????????C785????????00000000C745????????00FF15????????A3"
+	strings:
+		$1 = { 55 8B EC 81 EC ?? ?? ?? ?? 56 6A 00 FF 15 ?? ?? ?? ?? 89 85 ?? ?? ?? ?? C7 85 ?? ?? ?? ?? 00 00 00 00 C7 45 ?? ?? ?? ?? 00 FF 15 ?? ?? ?? ?? A3 }
+		$2 = "<!-- ----- ExeScript Options Begin -----"
+	condition:
+		$1 at pe.entry_point and
+		@2 > pe.sections[pe.section_index(".rdata")].raw_data_offset and
+		@2 < pe.sections[pe.section_index(".rdata")].raw_data_offset +
+			pe.sections[pe.section_index(".rdata")].raw_data_size
 }
 
 rule plugintoexe_100 {

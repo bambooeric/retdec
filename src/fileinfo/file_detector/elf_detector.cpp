@@ -6,6 +6,7 @@
 
 #include "retdec/utils/array.h"
 #include "retdec/utils/conversion.h"
+#include "retdec/utils/string.h"
 #include "retdec/fileformat/types/symbol_table/elf_symbol.h"
 #include "retdec/fileformat/utils/other.h"
 #include "fileinfo/file_detector/elf_detector.h"
@@ -547,7 +548,7 @@ std::string getSymbolLinkToSection(unsigned long long link)
 		case SHN_XINDEX:
 			return "XINDEX";
 		default:
-			return numToStr(link);
+			return std::to_string(link);
 	}
 }
 
@@ -787,7 +788,7 @@ ElfDetector::ElfDetector(
  */
 void ElfDetector::getFileVersion()
 {
-	fileInfo.setFileVersion(numToStr(elfParser->getFileVersion()));
+	fileInfo.setFileVersion(std::to_string(elfParser->getFileVersion()));
 }
 
 /**
@@ -795,7 +796,7 @@ void ElfDetector::getFileVersion()
  */
 void ElfDetector::getFileHeaderInfo()
 {
-	fileInfo.setFileHeaderVersion(numToStr(elfParser->getFileHeaderVersion()));
+	fileInfo.setFileHeaderVersion(std::to_string(elfParser->getFileHeaderVersion()));
 	fileInfo.setFileHeaderSize(elfParser->getFileHeaderSize());
 }
 
@@ -869,7 +870,7 @@ void ElfDetector::getSegments()
 void ElfDetector::getSymbolTable()
 {
 	// specific analysis for ARM architecture
-	unsigned long long machineType;
+	std::uint64_t machineType;
 	const bool isArm = elfParser->getMachineCode(machineType) && machineType == EM_ARM;
 	SpecialInformation specInfo("instruction set", "iset");
 
@@ -1198,7 +1199,7 @@ void ElfDetector::getCoreInfo()
 		auto name = mapGetValueOrDefault(auxVecMap, entry.first, "");
 		if(name.empty())
 		{
-			name = "UNKNOWN " + toString(entry.first);
+			name = "UNKNOWN " + std::to_string(entry.first);
 		}
 		fileInfo.addAuxVectorEntry(name, entry.second);
 	}
@@ -1284,7 +1285,7 @@ void ElfDetector::getOsAbiInfo()
 		abi = "Architecture-specific ABI extension";
 	}
 	fileInfo.setOsAbi(abi);
-	fileInfo.setOsAbiVersion(numToStr(abiVersion));
+	fileInfo.setOsAbiVersion(std::to_string(abiVersion));
 }
 
 /**
@@ -1352,7 +1353,7 @@ void ElfDetector::getOsAbiInfoNote()
 				if(elfParser->get4ByteOffset(notes[0].dataOffset, result))
 				{
 					fileInfo.setOsAbi("Android");
-					fileInfo.setOsAbiVersion(numToStr(result));
+					fileInfo.setOsAbiVersion(std::to_string(result));
 					return;
 				}
 			}
@@ -1376,7 +1377,7 @@ void ElfDetector::detectFileClass()
 
 void ElfDetector::detectArchitecture()
 {
-	unsigned long long machineType = 0;
+	std::uint64_t machineType = 0;
 	if(!elfParser->getMachineCode(machineType))
 	{
 		return;
@@ -1948,6 +1949,10 @@ void ElfDetector::detectFileType()
 	fileInfo.setFileType(fileType);
 }
 
+void ElfDetector::getTelfhash() {
+	fileInfo.setTelfhash(elfParser->getTelfhash());
+}
+
 void ElfDetector::getAdditionalInfo()
 {
 	getFileVersion();
@@ -1961,6 +1966,7 @@ void ElfDetector::getAdditionalInfo()
 	getSymbolTable();
 	getNotes();
 	getCoreInfo();
+	getTelfhash();
 }
 
 /**
@@ -1969,7 +1975,7 @@ void ElfDetector::getAdditionalInfo()
  */
 retdec::cpdetect::CompilerDetector* ElfDetector::createCompilerDetector() const
 {
-	return new ElfCompiler(*elfParser, cpParams, fileInfo.toolInfo);
+	return new CompilerDetector(*elfParser, cpParams, fileInfo.toolInfo);
 }
 
 } // namespace fileinfo

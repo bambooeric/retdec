@@ -1,16 +1,13 @@
 /**
  * @file include/retdec/fileformat/types/certificate_table/certificate.h
  * @brief Class for one certificate.
- * @copyright (c) 2017 Avast Software, licensed under the MIT license
+ * @copyright (c) 2021 Avast Software, licensed under the MIT license
  */
 
 #ifndef RETDEC_FILEFORMAT_TYPES_CERTIFICATE_TABLE_CERTIFICATE_H
 #define RETDEC_FILEFORMAT_TYPES_CERTIFICATE_TABLE_CERTIFICATE_H
 
 #include <string>
-
-// Forward declare OpenSSL structures used in this header.
-typedef struct x509_st X509;
 
 namespace retdec {
 namespace fileformat {
@@ -39,8 +36,7 @@ class Certificate
 			std::string generationQualifier;
 			std::string emailAddress;
 		};
-	private:
-		X509 *certImpl;
+	public:
 		std::string validSince;
 		std::string validUntil;
 		std::string publicKey;
@@ -50,20 +46,13 @@ class Certificate
 		std::string sha1Digest;
 		std::string sha256Digest;
 		std::string subjectRaw;
+		std::string subjectOneline;
 		std::string issuerRaw;
+		std::string issuerOneline;
 		Attributes subject;
 		Attributes issuer;
 
-		void load();
-		void loadValidity();
-		void loadPublicKey();
-		void loadSignatureAlgorithm();
-		void loadSerialNumber();
-		void loadIssuerAndSubject();
-		void calculateHashes();
 	public:
-		Certificate(X509 *cert);
-
 		/// @name Getters
 		/// @{
 		const std::string& getValidSince() const;
@@ -76,6 +65,8 @@ class Certificate
 		const std::string& getSha256Digest() const;
 		const std::string& getRawSubject() const;
 		const std::string& getRawIssuer() const;
+		const std::string& getOnelineSubject() const;
+		const std::string& getOnelineIssuer() const;
 		const Certificate::Attributes& getSubject() const;
 		const Certificate::Attributes& getIssuer() const;
 		/// @}

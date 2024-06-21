@@ -9,19 +9,31 @@ from __future__ import print_function
 
 import argparse
 import importlib
+import os
 import sys
 
-config = importlib.import_module('retdec-config')
 utils = importlib.import_module('retdec-utils')
 utils.check_python_version()
 utils.ensure_script_is_being_run_from_installed_retdec()
-retdec_archive_decompiler = importlib.import_module('retdec-archive-decompiler')
 
-ArchiveDecompiler = retdec_archive_decompiler.ArchiveDecompiler
-
+try:
+    retdec_archive_decompiler = importlib.import_module('retdec-archive-decompiler')
+    ArchiveDecompiler = retdec_archive_decompiler.ArchiveDecompiler
+except ImportError:
+    ArchiveDecompiler = None
 
 sys.stdout = utils.Unbuffered(sys.stdout)
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+FILEINFO = os.path.join(SCRIPT_DIR, 'retdec-fileinfo')
+INSTALL_SHARE_YARA_DIR = os.path.join(SCRIPT_DIR, '..', 'share', 'retdec', 'support', 'generic', 'yara_patterns')
+
+FILEINFO_EXTERNAL_YARA_PRIMARY_CRYPTO_DATABASES = [
+    os.path.join(INSTALL_SHARE_YARA_DIR, 'signsrch', 'signsrch.yara'),
+    os.path.join(INSTALL_SHARE_YARA_DIR, 'signsrch', 'signsrch.yarac')]
+FILEINFO_EXTERNAL_YARA_EXTRA_CRYPTO_DATABASES = [
+    os.path.join(INSTALL_SHARE_YARA_DIR, 'signsrch', 'signsrch_regex.yara'),
+    os.path.join(INSTALL_SHARE_YARA_DIR, 'signsrch', 'signsrch_regex.yarac')]
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -68,6 +80,7 @@ def main():
         if args.json:
             archive_decompiler_args.append('--json')
 
+        assert ArchiveDecompiler is not None, "You need to install RetDec with Decompiler in order to analyze archives"
         decompiler = ArchiveDecompiler(archive_decompiler_args)
         sys.exit(decompiler.decompile_archive())
 
@@ -77,14 +90,14 @@ def main():
     if args.json:
         fileinfo_params.append('--json')
 
-    for par in config.FILEINFO_EXTERNAL_YARA_PRIMARY_CRYPTO_DATABASES:
+    for par in FILEINFO_EXTERNAL_YARA_PRIMARY_CRYPTO_DATABASES:
         fileinfo_params.extend(['--crypto', par])
 
     if args.external_patterns:
-        for par in config.FILEINFO_EXTERNAL_YARA_EXTRA_CRYPTO_DATABASES:
+        for par in FILEINFO_EXTERNAL_YARA_EXTRA_CRYPTO_DATABASES:
             fileinfo_params.extend(['--crypto', par])
 
-    _, ret, _ = utils.CmdRunner.run_cmd([config.FILEINFO] + fileinfo_params)
+    _, ret, _ = utils.CmdRunner.run_cmd([FILEINFO] + fileinfo_params)
     sys.exit(ret)
 
 

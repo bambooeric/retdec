@@ -7,18 +7,21 @@
 #include <cstdint>
 #include <fstream>
 #include <iomanip>
-#include <iostream>
 #include <istream>
 #include <map>
 #include <set>
 #include <vector>
 
 #include "retdec/utils/conversion.h"
+#include "retdec/utils/io/log.h"
+#include "retdec/utils/version.h"
 #include "yaramod/builder/yara_expression_builder.h"
 #include "yaramod/builder/yara_hex_string_builder.h"
 #include "yaramod/builder/yara_rule_builder.h"
 
+using namespace std::string_literals;
 using namespace retdec::utils;
+using namespace retdec::utils::io;
 using namespace yaramod;
 
 /**
@@ -104,7 +107,7 @@ std::string getRelocationsAsString(
 	std::string result;
 	for (const auto &reloc : relocations) {
 		if (!reloc.second.empty()) {
-			result += toHex(reloc.first, false, 4) + " " + reloc.second + " ";
+			result += intToHexString(reloc.first, false, 4) + " " + reloc.second + " ";
 		}
 	}
 
@@ -217,7 +220,7 @@ void readFunction(
 	ruleBuilder.withHexString("$1", hexBuilder.get());
 	ruleBuilder.withCondition(stringRef("$1").get());
 
-	std::cout << ruleBuilder.get()->getText() << "\n";
+	Log::info() << ruleBuilder.get()->getText() << "\n";
 }
 
 /**
@@ -298,7 +301,7 @@ bool readDatabase(
  */
 int printError(const std::string &message)
 {
-	std::cerr << "Error: " << message << ".\n";
+	Log::error() << Log::Error << message << ".\n";
 	return 1;
 }
 
@@ -306,6 +309,11 @@ int main(int argc, char** argv)
 {
 	if (argc != 2) {
 		return printError("need one argument - KB path");
+	}
+
+	if ("--version"s == argv[1]) {
+		Log::info() << version::getVersionStringLong() << "\n";
+		return 0;
 	}
 
 	std::ifstream inputFile(argv[1], std::ios::binary);

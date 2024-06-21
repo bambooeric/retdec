@@ -4,7 +4,6 @@
 * @copyright (c) 2017 Avast Software, licensed under the MIT license
 */
 
-#include <iostream>
 #include <string>
 
 #include <llvm/IR/Constants.h>
@@ -94,7 +93,7 @@ bool cannotBeOptimized(Function& func, const std::set<llvm::Function*>& funcs)
 char UnreachableFuncs::ID = 0;
 
 RegisterPass<UnreachableFuncs> UnreachableFuncsRegistered(
-		"unreachable-funcs",
+		"retdec-unreachable-funcs",
 		"Unreachable functions optimization",
 		false,
 		false);
@@ -135,7 +134,8 @@ bool UnreachableFuncs::run()
 		return false;
 	}
 	if (config->getConfig().fileType.isShared()
-			|| config->getConfig().fileType.isObject())
+			|| config->getConfig().fileType.isObject()
+			|| config->getConfig().parameters.isKeepAllFunctions())
 	{
 		return false;
 	}
@@ -143,7 +143,7 @@ bool UnreachableFuncs::run()
 	// The main function has to be a definition, not just a declaration. This
 	// is needed when decompiling shared libraries containing an import of main.
 	//
-	mainFunc = config->getLlvmFunction(config->getConfig().getMainAddress());
+	mainFunc = config->getLlvmFunction(config->getConfig().parameters.getMainAddress());
 	if (mainFunc == nullptr || mainFunc->isDeclaration())
 	{
 		return false;

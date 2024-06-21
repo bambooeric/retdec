@@ -4,10 +4,12 @@
  * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
 
-#include <iostream>
-
+#include "retdec/fileformat/types/certificate_table/certificate_table.h"
 #include "retdec/utils/conversion.h"
 #include "retdec/utils/string.h"
+#include "retdec/utils/io/log.h"
+#include "retdec/utils/time.h"
+#include "retdec/utils/version.h"
 #include "retdec/fileformat/utils/conversions.h"
 #include "retdec/serdes/pattern.h"
 #include "retdec/serdes/std.h"
@@ -17,6 +19,7 @@
 
 using namespace retdec;
 using namespace retdec::utils;
+using namespace retdec::utils::io;
 using namespace retdec::cpdetect;
 using namespace retdec::fileformat;
 
@@ -94,11 +97,20 @@ bool presentSimple(
 /**
  * Constructor
  */
-JsonPresentation::JsonPresentation(FileInformation &fileinfo_, bool verbose_)
-		: FilePresentation(fileinfo_)
-		, verbose(verbose_)
+JsonPresentation::JsonPresentation(FileInformation &fileinfo_, bool verbose_, bool analysisTime_)
+		: FilePresentation(fileinfo_), verbose(verbose_), analysisTime(analysisTime_)
 {
 
+}
+
+void JsonPresentation::presentFileinfoVersion(Writer& writer) const
+{
+	writer.String("fileinfoVersion");
+	writer.StartObject();
+	serializeString(writer, "commitHash", utils::version::getCommitHash());
+	serializeString(writer, "versionTag", utils::version::getVersionTag());
+	serializeString(writer, "buildDate", utils::version::getBuildDate());
+	writer.EndObject();
 }
 
 /**
@@ -280,6 +292,15 @@ void JsonPresentation::presentRichHeader(Writer& writer) const
 	serializeString(writer, "offset", offset);
 	serializeString(writer, "key", key);
 	serializeString(writer, "signature", sig);
+
+	auto crc32 = fileinfo.getRichHeaderCrc32();
+	auto md5 = fileinfo.getRichHeaderMd5();
+	auto sha256 = fileinfo.getRichHeaderSha256();
+
+	serializeString(writer, "crc32", crc32);
+	serializeString(writer, "md5", md5);
+	serializeString(writer, "sha256", sha256);
+
 	writer.EndObject();
 }
 
@@ -340,7 +361,7 @@ void JsonPresentation::presentMissingDepsInfo(Writer& writer) const
 
 	writer.String("missingDeps");
 	writer.StartObject();
-	serializeString(writer, "count", numToStr(numberOfMissingDeps));
+	serializeString(writer, "count", std::to_string(numberOfMissingDeps));
 	presentIterativeSubtitle(writer, MissingDepsJsonGetter(fileinfo));
 	writer.EndObject();
 }
@@ -367,137 +388,163 @@ void JsonPresentation::presentLoaderInfo(Writer& writer) const
 	writer.EndObject();
 }
 
+void WriteCertificate(JsonPresentation::Writer& writer, const Certificate& cert)
+{
+		writer.StartObject();
+		serializeString(writer, "subject", cert.getRawSubject());
+		serializeString(writer, "issuer", cert.getRawIssuer());
+		serializeString(writer, "subjectOneline", cert.getOnelineSubject());
+		serializeString(writer, "issuerOneline", cert.getOnelineIssuer());
+		serializeString(writer, "serialNumber", cert.getSerialNumber());
+		serializeString(writer, "publicKeyAlgorithm", cert.getPublicKeyAlgorithm());
+		serializeString(writer, "signatureAlgorithm", cert.getSignatureAlgorithm());;
+		serializeString(writer, "validSince", cert.getValidSince());
+		serializeString(writer, "validUntil", cert.getValidUntil());
+		serializeString(writer, "sha1", cert.getSha1Digest());
+		serializeString(writer, "sha256", cert.getSha256Digest());
+		serializeString(writer, "publicKey", cert.getPublicKey());
+
+		writer.String("attributes");
+		writer.StartObject();
+
+		writer.String("subject");
+		writer.StartObject();
+		serializeString(writer, "country", cert.getSubject().country);
+		serializeString(writer, "organization", cert.getSubject().organization);
+		serializeString(writer, "organizationalUnit",  cert.getSubject().organizationalUnit);
+		serializeString(writer, "nameQualifier",  cert.getSubject().nameQualifier);
+		serializeString(writer, "state", cert.getSubject().state);
+		serializeString(writer, "commonName", cert.getSubject().commonName);
+		serializeString(writer, "serialNumber", cert.getSubject().serialNumber);
+		serializeString(writer, "locality", cert.getSubject().locality);
+		serializeString(writer, "title", cert.getSubject().title);
+		serializeString(writer, "surname", cert.getSubject().surname);
+		serializeString(writer, "givenName", cert.getSubject().givenName);
+		serializeString(writer, "initials", cert.getSubject().initials);
+		serializeString(writer, "pseudonym", cert.getSubject().pseudonym);
+		serializeString(writer, "generationQualifier", cert.getSubject().generationQualifier);
+		serializeString(writer, "emailAddress", cert.getSubject().emailAddress);
+		writer.EndObject();
+
+		writer.String("issuer");
+		writer.StartObject();
+		serializeString(writer, "country", cert.getIssuer().country);
+		serializeString(writer, "organization", cert.getIssuer().organization);
+		serializeString(writer, "organizationalUnit",  cert.getIssuer().organizationalUnit);
+		serializeString(writer, "nameQualifier",  cert.getIssuer().nameQualifier);
+		serializeString(writer, "state", cert.getIssuer().state);
+		serializeString(writer, "commonName", cert.getIssuer().commonName);
+		serializeString(writer, "serialNumber", cert.getIssuer().serialNumber);
+		serializeString(writer, "locality", cert.getIssuer().locality);
+		serializeString(writer, "title", cert.getIssuer().title);
+		serializeString(writer, "surname", cert.getIssuer().surname);
+		serializeString(writer, "givenName", cert.getIssuer().givenName);
+		serializeString(writer, "initials", cert.getIssuer().initials);
+		serializeString(writer, "pseudonym", cert.getIssuer().pseudonym);
+		serializeString(writer, "generationQualifier", cert.getIssuer().generationQualifier);
+		serializeString(writer, "emailAddress", cert.getIssuer().emailAddress);
+		writer.EndObject();
+
+		writer.EndObject();
+
+		writer.EndObject();
+}
+
+void WriteCertificateChain(JsonPresentation::Writer& writer, const std::vector<Certificate>& certificates)
+{
+	writer.StartArray();
+	for (auto&& cert: certificates)
+	{
+		WriteCertificate(writer, cert);
+	}
+	writer.EndArray();
+}
+
+void WriteSigner(JsonPresentation::Writer& writer, const Signer& signer)
+{
+	writer.StartObject();
+	writer.String("warnings");
+	writer.StartArray();
+	for (auto&& warn: signer.warnings)
+	{
+		writer.String(warn);
+	}
+	writer.EndArray();
+
+	serializeString(writer, "signTime", signer.signingTime);
+
+	serializeString(writer, "digest", signer.digest);
+
+	serializeString(writer, "digestAlgorithm", signer.digestAlgorithm);
+
+	if (!signer.chain.empty())
+	{
+		writer.String("certificate");
+		WriteCertificate(writer, signer.chain[0]);
+	}
+
+	writer.String("chain");
+	WriteCertificateChain(writer, signer.chain);
+
+	writer.String("counterSigners");
+	writer.StartArray();
+	for (auto&& csigner: signer.counterSigners)
+	{
+		WriteSigner(writer, csigner);
+	}
+	writer.EndArray();
+
+	writer.EndObject();
+}
+
+void WriteSignature(JsonPresentation::Writer& writer, const DigitalSignature& signature)
+{
+	writer.StartObject();
+	writer.String("signatureVerified");
+	writer.Bool(signature.isValid);
+	writer.String("warnings");
+	writer.StartArray();
+	for (auto&& warn : signature.warnings) {
+		writer.String(warn);
+	}
+	writer.EndArray();
+
+	serializeString(writer, "digestAlgorithm", signature.digestAlgorithm);
+	serializeString(writer, "fileDigest", signature.fileDigest);
+	serializeString(writer, "signedDigest", signature.signedDigest);
+	serializeString(writer, "programName", signature.programName);
+
+	writer.String("allCertificates");
+	WriteCertificateChain(writer, signature.certificates);
+
+	writer.String("signer");
+	WriteSigner(writer, signature.signer);
+
+	writer.EndObject();
+}
+
 /**
  * Present information about certificates into certificate table
  */
 void JsonPresentation::presentCertificates(Writer& writer) const
 {
-	if(!fileinfo.hasCertificateTableRecords())
+
+	if (!fileinfo.certificateTable || !fileinfo.certificateTable->isOutsideImage)
 	{
 		return;
 	}
+	writer.String("digitalSignatures");
 
-	writer.String("certificateTable");
 	writer.StartObject();
-
-	// Basic info.
-	serializeString(
-			writer,
-			"numberOfCertificates",
-			numToStr(fileinfo.getNumberOfStoredCertificates()));
-	if (fileinfo.hasCertificateTableSignerCertificate())
-	{
-		serializeString(
-				writer,
-				"signerCertificateIndex",
-				numToStr(fileinfo.getCertificateTableSignerCertificateIndex()));
-	}
-	if (fileinfo.hasCertificateTableCounterSignerCertificate())
-	{
-		serializeString(
-				writer,
-				"counterSignerCertificateIndex",
-				numToStr(fileinfo.getCertificateTableCounterSignerCertificateIndex()));
-	}
-
-	writer.String("certificates");
+	writer.Key("numberOfSignatures");
+	writer.Int64(fileinfo.certificateTable->signatures.size());
+	writer.String("signatures");
 	writer.StartArray();
-	for(std::size_t i = 0; i < fileinfo.getNumberOfStoredCertificates(); ++i)
+	for (auto&& signature : fileinfo.certificateTable->signatures)
 	{
-		writer.StartObject();
-
-		serializeString(
-			writer,
-			"index",
-			numToStr(i));
-		serializeString(
-			writer,
-			"validSince",
-			fileinfo.getCertificateValidSince(i));
-		serializeString(
-			writer,
-			"validUntil",
-			fileinfo.getCertificateValidUntil(i));
-		serializeString(
-			writer,
-			"publicKey",
-			fileinfo.getCertificatePublicKey(i));
-		serializeString(
-			writer,
-			"publicKeyAlgorithm",
-			fileinfo.getCertificatePublicKeyAlgorithm(i));
-		serializeString(
-			writer,
-			"signatureAlgorithm",
-			fileinfo.getCertificateSignatureAlgorithm(i));
-		serializeString(
-			writer,
-			"serialNumber",
-			fileinfo.getCertificateSerialNumber(i));
-		serializeString(
-			writer,
-			"issuer",
-			fileinfo.getCertificateIssuerRawStr(i));
-		serializeString(
-			writer,
-			"subject",
-			fileinfo.getCertificateSubjectRawStr(i));
-		serializeString(
-			writer,
-			"sha1",
-			fileinfo.getCertificateSha1Digest(i));
-		serializeString(
-			writer,
-			"sha256",
-			fileinfo.getCertificateSha256Digest(i));
-
-		writer.String("attributes");
-		writer.StartObject();
-
-		writer.String("issuer");
-		writer.StartObject();
-		serializeString(writer, "country", fileinfo.getCertificateIssuerCountry(i));
-		serializeString(writer, "organization", fileinfo.getCertificateIssuerOrganization(i));
-		serializeString(writer, "organizationalUnit", fileinfo.getCertificateIssuerOrganizationalUnit(i));
-		serializeString(writer, "nameQualifier", fileinfo.getCertificateIssuerNameQualifier(i));
-		serializeString(writer, "state", fileinfo.getCertificateIssuerState(i));
-		serializeString(writer, "commonName", fileinfo.getCertificateIssuerCommonName(i));
-		serializeString(writer, "serialNumber", fileinfo.getCertificateIssuerSerialNumber(i));
-		serializeString(writer, "locality", fileinfo.getCertificateIssuerLocality(i));
-		serializeString(writer, "title", fileinfo.getCertificateIssuerTitle(i));
-		serializeString(writer, "surname", fileinfo.getCertificateIssuerSurname(i));
-		serializeString(writer, "givenName", fileinfo.getCertificateIssuerGivenName(i));
-		serializeString(writer, "initials", fileinfo.getCertificateIssuerInitials(i));
-		serializeString(writer, "pseudonym", fileinfo.getCertificateIssuerPseudonym(i));
-		serializeString(writer, "generationQualifier", fileinfo.getCertificateIssuerGenerationQualifier(i));
-		serializeString(writer, "emailAddress", fileinfo.getCertificateIssuerEmailAddress(i));
-		writer.EndObject();
-
-		writer.String("subject");
-		writer.StartObject();
-		serializeString(writer, "country", fileinfo.getCertificateSubjectCountry(i));
-		serializeString(writer, "organization", fileinfo.getCertificateSubjectOrganization(i));
-		serializeString(writer, "organizationalUnit", fileinfo.getCertificateSubjectOrganizationalUnit(i));
-		serializeString(writer, "nameQualifier", fileinfo.getCertificateSubjectNameQualifier(i));
-		serializeString(writer, "state", fileinfo.getCertificateSubjectState(i));
-		serializeString(writer, "commonName", fileinfo.getCertificateSubjectCommonName(i));
-		serializeString(writer, "serialNumber", fileinfo.getCertificateSubjectSerialNumber(i));
-		serializeString(writer, "locality", fileinfo.getCertificateSubjectLocality(i));
-		serializeString(writer, "title", fileinfo.getCertificateSubjectTitle(i));
-		serializeString(writer, "surname", fileinfo.getCertificateSubjectSurname(i));
-		serializeString(writer, "givenName", fileinfo.getCertificateSubjectGivenName(i));
-		serializeString(writer, "initials", fileinfo.getCertificateSubjectInitials(i));
-		serializeString(writer, "pseudonym", fileinfo.getCertificateSubjectPseudonym(i));
-		serializeString(writer, "generationQualifier", fileinfo.getCertificateSubjectGenerationQualifier(i));
-		serializeString(writer, "emailAddress", fileinfo.getCertificateSubjectEmailAddress(i));
-		writer.EndObject();
-
-		writer.EndObject();
-
-		writer.EndObject();
+		WriteSignature(writer, signature);
 	}
 	writer.EndArray();
-
 	writer.EndObject();
 }
 
@@ -1219,13 +1266,68 @@ void JsonPresentation::presentIterativeSubtitle(
 	}
 }
 
+void presentPeTimestamps(JsonPresentation::Writer& writer, FileInformation& fileinfo)
+{
+	PeTimestamps pe_timestamps = fileinfo.pe_timestamps;
+
+	writer.String("timestamps");
+	writer.StartObject();
+
+	if (pe_timestamps.coffTime)
+		serializeString(writer, "coffHeader", timestampToGmtDatetime(static_cast<std::time_t>(pe_timestamps.coffTime)));
+	if (pe_timestamps.configTime)
+		serializeString(writer, "loadConfigDir", timestampToGmtDatetime(static_cast<std::time_t>(pe_timestamps.configTime)));
+	if (pe_timestamps.exportTime)
+		serializeString(writer, "exportDir", timestampToGmtDatetime(static_cast<std::time_t>(pe_timestamps.exportTime)));
+
+	writer.String("debugDirEntries");
+	writer.StartArray();
+	for (auto timestamp : pe_timestamps.debugTime)
+	{
+		if (timestamp)
+			writer.String(timestampToGmtDatetime(static_cast<std::time_t>(timestamp)));
+	}
+	writer.EndArray();
+
+	writer.String("resourceDirectories");
+	writer.StartArray();
+	for (auto timestamp : pe_timestamps.resourceTime)
+	{
+		if (timestamp)
+			writer.String(timestampToGmtDatetime(static_cast<std::time_t>(timestamp)));
+	}
+	writer.EndArray();
+
+	writer.String("pdbDebugInfos");
+	writer.StartArray();
+	for (auto timestamp : pe_timestamps.pdbTime)
+	{
+		if (timestamp)
+			writer.String(timestampToGmtDatetime(static_cast<std::time_t>(timestamp)));
+	}
+	writer.EndArray();
+
+	writer.EndObject();
+}
+
 bool JsonPresentation::present()
 {
 	rapidjson::StringBuffer sb;
 	Writer writer(sb);
 	writer.StartObject();
 
+	if(verbose)
+	{
+		presentFileinfoVersion(writer);
+	}
+
+	if(analysisTime)
+	{
+		serializeString(writer, "analysisTime", fileinfo.getAnalysisTime());
+	}
+
 	serializeString(writer, "inputFile", fileinfo.getPathToFile());
+	serializeString(writer, "dllName", fileinfo.getExportDllName());
 
 	presentErrors(writer);
 	presentLoaderError(writer);
@@ -1237,6 +1339,11 @@ bool JsonPresentation::present()
 
 	if(verbose)
 	{
+		if (fileinfo.getFileFormatEnum() == retdec::fileformat::Format::PE)
+		{
+			presentPeTimestamps(writer, this->fileinfo);
+		}
+
 		std::string flags, title;
 		std::vector<std::string> desc, info;
 
@@ -1285,7 +1392,7 @@ bool JsonPresentation::present()
 	presentIterativeSubtitle(writer, StringsJsonGetter(fileinfo));
 
 	writer.EndObject();
-	std::cout << sb.GetString() << std::endl;
+	Log::info() << sb.GetString() << std::endl;
 
 	return true;
 }

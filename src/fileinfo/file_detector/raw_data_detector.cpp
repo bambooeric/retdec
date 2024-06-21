@@ -120,7 +120,7 @@ void RawDataDetector::detectFileType()
 
 void RawDataDetector::getAdditionalInfo()
 {
-	unsigned long long ep = 0;
+	std::uint64_t ep = 0;
 	if(fileParser->getEpAddress(ep))
 	{
 		fileInfo.toolInfo.epAddress = ep;
@@ -136,7 +136,7 @@ retdec::cpdetect::CompilerDetector* RawDataDetector::createCompilerDetector() co
 		cpParams.searchType = SearchType::MOST_SIMILAR;
 	}
 
-	return new RawDataCompiler(*rawParser, cpParams, fileInfo.toolInfo);
+	return new CompilerDetector(*rawParser, cpParams, fileInfo.toolInfo);
 }
 
 } // namespace fileinfo

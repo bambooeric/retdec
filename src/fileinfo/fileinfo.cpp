@@ -4,19 +4,24 @@
  * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
 
-#include <iostream>
 #include <regex>
 
+#include <rapidjson/document.h>
 #include <llvm/Support/ErrorHandling.h>
 
+#include "retdec/utils/binary_path.h"
 #include "retdec/utils/conversion.h"
 #include "retdec/utils/memory.h"
+#include "retdec/utils/io/log.h"
 #include "retdec/utils/string.h"
+#include "retdec/utils/time.h"
+#include "retdec/utils/version.h"
 #include "retdec/ar-extractor/detection.h"
 #include "retdec/cpdetect/errors.h"
 #include "retdec/cpdetect/settings.h"
 #include "retdec/fileformat/utils/format_detection.h"
 #include "retdec/fileformat/utils/other.h"
+#include "retdec/serdes/std.h"
 #include "fileinfo/file_detector/detector_factory.h"
 #include "fileinfo/file_detector/macho_detector.h"
 #include "fileinfo/file_presentation/config_presentation.h"
@@ -25,6 +30,7 @@
 #include "fileinfo/pattern_detector/pattern_detector.h"
 
 using namespace retdec::utils;
+using namespace retdec::utils::io;
 using namespace retdec::ar_extractor;
 using namespace retdec::cpdetect;
 using namespace retdec::fileformat;
@@ -38,36 +44,75 @@ namespace
  */
 struct ProgParams
 {
-	std::string filePath;                   ///< name of input file
-	SearchType searchMode;                  ///< type of search
-	bool internalDatabase;                  ///< use of internal signature database
-	bool externalDatabase;                  ///< use of external signature database
-	bool plainText;                         ///< print output as plain text
-	bool verbose;                           ///< print all detected information (except strings)
-	bool explanatory;                       ///< print explanatory notes
-	bool generateConfigFile;                ///< flag for generating config file
-	std::string configFile;                 ///< name of the config file
-	std::string dllListFile;                ///< name of the file with the DLL list
-	std::set<std::string> yaraMalwarePaths; ///< paths to YARA malware rules
-	std::set<std::string> yaraCryptoPaths;  ///< paths to YARA crypto rules
-	std::set<std::string> yaraOtherPaths;   ///< paths to YARA other rules
-	std::size_t maxMemory;                  ///< maximal memory
-	bool maxMemoryHalfRAM;                  ///< limit maximal memory to half of system RAM
-	std::size_t epBytesCount;               ///< number of bytes to load from entry point
-	LoadFlags loadFlags;                    ///< load flags for `fileformat`
+	/// name of input file
+	std::string filePath;
+	/// type of search
+	SearchType searchMode = SearchType::EXACT_MATCH;
+	/// use of internal signature database
+	bool internalDatabase = true;
+	///< use of external signature database
+	bool externalDatabase = false;
+	///< print output as plain text
+	bool plainText = true;
+	///< print all detected information (except strings)
+	bool verbose = false;
+	///< print explanatory notes
+	bool explanatory = false;
+	///< flag for generating config file
+	bool generateConfigFile = false;
+	///< name of the config file
+	std::string configFile;
+	///< name of the file with the DLL list
+	std::string dllListFile;
+	///< paths to YARA malware rules
+	std::set<std::string> yaraMalwarePaths;
+	///< paths to YARA crypto rules
+	std::set<std::string> yaraCryptoPaths;
+	///< paths to YARA other rules
+	std::set<std::string> yaraOtherPaths;
+	std::size_t maxMemory = 0;
+	/// limit maximal memory to half of system RAM
+	bool maxMemoryHalfRAM = false;
+	/// number of bytes to load from entry point
+	std::size_t epBytesCount = EP_BYTES_SIZE;
+	/// load flags for `fileformat`
+	LoadFlags loadFlags = LoadFlags::NONE;
+	/// flag whether to include analysis time into the output
+	bool analysisTime = false;
 
-	ProgParams() : searchMode(SearchType::EXACT_MATCH),
-					internalDatabase(true),
-					externalDatabase(false),
-					plainText(true),
-					verbose(false),
-					explanatory(false),
-					generateConfigFile(false),
-					maxMemory(0),
-					maxMemoryHalfRAM(false),
-					epBytesCount(EP_BYTES_SIZE),
-					loadFlags(LoadFlags::NONE) {}
+	friend std::ostream& operator<<(std::ostream& os, const ProgParams& pp);
 };
+
+std::ostream& operator<<(std::ostream& os, const ProgParams& pp)
+{
+	os << "input file         : " << pp.filePath << "\n";
+	os << "search mode        : " << pp.searchMode << "\n";
+	os << "use internal db    : " << std::boolalpha << pp.internalDatabase << "\n";
+	os << "use external db    : " << pp.externalDatabase << "\n";
+	os << "plain output       : " << pp.plainText << "\n";
+	os << "verbose            : " << pp.verbose << "\n";
+	os << "explanatory        : " << pp.explanatory << "\n";
+	os << "generate config    : " << pp.generateConfigFile << "\n";
+	os << "config file        : " << pp.configFile << "\n";
+	os << "dll list file      : " << pp.dllListFile << "\n";
+	os << "maximal memory     : " << pp.maxMemory << "\n";
+	os << "max half memory    : " << pp.maxMemoryHalfRAM << "\n";
+	os << "ep bytes count     : " << pp.epBytesCount << "\n";
+	os << "load flags         : " << pp.loadFlags << "\n";
+	os << "analysis time      : " << pp.analysisTime << "\n";
+
+	os << "yara malware rules : " << "\n";
+	for (auto& r : pp.yaraMalwarePaths)
+		os << "\t" << r << "\n";
+	os << "yara crypto rules  : " << "\n";
+	for (auto& r : pp.yaraCryptoPaths)
+		os << "\t" << r << "\n";
+	os << "yara other rules   : " << "\n";
+	for (auto& r : pp.yaraOtherPaths)
+		os << "\t" << r << "\n";
+
+	return os;
+}
 
 /**
  * LLVM fatal error handler information
@@ -93,11 +138,11 @@ void fatalErrorHandler(void *user_data, const std::string& /*reason*/, bool /*ge
 
 	if(params->plainText)
 	{
-		PlainPresentation(*fileinfo, params->verbose, params->explanatory).present();
+		PlainPresentation(*fileinfo, params->verbose, params->explanatory, params->analysisTime).present();
 	}
 	else
 	{
-		JsonPresentation(*fileinfo, params->verbose).present();
+		JsonPresentation(*fileinfo, params->verbose, params->analysisTime).present();
 	}
 
 	exit(static_cast<int>(ReturnCode::FORMAT_PARSER_PROBLEM));
@@ -108,13 +153,14 @@ void fatalErrorHandler(void *user_data, const std::string& /*reason*/, bool /*ge
  */
 void printHelp()
 {
-	std::cout << "fileinfo - dumper of information about executable file\n\n"
+	Log::info() << "fileinfo - dumper of information about executable file\n\n"
 				<< "For compiler detection, program looks in the input file for YARA patterns.\n"
 				<< "According to them, it determines compiler or packer used for file creation.\n"
 				<< "Supported file formats are: " + joinStrings(getSupportedFileFormats()) + ".\n\n"
 				<< "Usage: fileinfo [options] file\n\n"
 				<< "Options list:\n"
 				<< "    --help, -h            Display this help.\n"
+				<< "    --version             Display program's version.\n"
 				<< "\n"
 				<< "Options specifying type of YARA patterns matching for detection of used compiler\n"
 				<< "or packer:\n"
@@ -164,10 +210,14 @@ void printHelp()
 				<< "                          Without this parameter program print only\n"
 				<< "                          basic information.\n"
 				<< "    --explanatory, -X     Print explanatory notes (only in plain text output).\n"
+				<< "    --analysis-time       Print also analysis time into output.\n"
 				<< "\n"
 				<< "Options for specifying configuration file:\n"
 				<< "    --config=file, -c=file\n"
 				<< "                          Set path and name of the config which will be (re)generated.\n"
+				<< "    --fileinfo-config=file\n"
+				<< "                          Specify fileinfo configuration file to use.\n"
+				<< "                          Configuration file can be used instead of these command line options.\n"
 				<< "\n"
 				<< "Options for limiting maximal memory:\n"
 				<< "    --max-memory=N\n"
@@ -180,7 +230,7 @@ void printHelp()
 				<< "                          Load the list of present DLLs from the file.\n";
 }
 
-std::string getParamOrDie(std::vector<std::string> &argv, std::size_t &i)
+std::string getParamOrDie(const std::vector<std::string> &argv, std::size_t &i)
 {
 	if (argv.size() > i+1)
 	{
@@ -188,10 +238,262 @@ std::string getParamOrDie(std::vector<std::string> &argv, std::size_t &i)
 	}
 	else
 	{
-		std::cerr << getErrorMessage(ReturnCode::ARG) << "\n\n";
+		Log::error() << getErrorMessage(ReturnCode::ARG) << "\n\n";
 		printHelp();
 		exit(static_cast<int>(ReturnCode::ARG));
 	}
+}
+
+/**
+ * @return If @a path is relative, return an absolute path created from parent
+ *         path of @a config file and relative @a path.
+ */
+std::string fixRelativePath(const std::string& path, const std::string& config)
+{
+	if (config.empty())
+		return path;
+
+	if (fs::path(path).is_relative())
+	{
+		auto root = fs::canonical(config).parent_path();
+		return (root / path).string();
+	}
+	else
+	{
+		return path;
+	}
+}
+
+bool jsonGetPathArray(
+		rapidjson::Document& root,
+		const std::string& name,
+		std::set<std::string>& val,
+		const std::string& configPath = "")
+{
+	if (root.HasMember(name))
+	{
+		if (root[name].IsArray())
+		{
+			for (auto& v : root[name].GetArray())
+			{
+				if (v.IsString())
+				{
+					if (v.GetStringLength())
+					{
+						auto path = fixRelativePath(
+								v.GetString(),
+								configPath
+						);
+						if (fs::exists(path))
+						{
+							val.insert(path);
+						}
+					}
+				}
+				else
+				{
+					Log::error() << Log::Error << "JSON config: \"" << name
+							<< "\" has bad value!\n";
+					return false;
+				}
+			}
+		}
+		else
+		{
+			Log::error() << Log::Error << "JSON config: \"" << name
+					<< "\" has bad value!\n";
+			return false;
+		}
+	}
+	return true;
+}
+
+/**
+ * Config JSON string processing.
+ * @param params Structure for storing information
+ * @param json JSON string to process
+ * @param configPath Path to JSON config file, used for fixing relative paths
+ * @return @c true if processing was completed successfully, @c false otherwise
+ */
+bool doConfigString(
+		ProgParams& params,
+		const std::string& json,
+		const std::string& configPath = "")
+{
+	rapidjson::Document root;
+	rapidjson::ParseResult ok = root.Parse<rapidjson::kParseCommentsFlag>(json);
+	if (!ok)
+	{
+		Log::error() << Log::Error << "Failed to parse fileinfo JSON configuration!\n";
+		return false;
+	}
+
+	if (root.HasMember("outputFormat"))
+	{
+		auto val = root["outputFormat"].IsString()
+				? root["outputFormat"].GetString() : std::string();
+		if (val == "plain") params.plainText = true;
+		else if (val == "json") params.plainText = false;
+		else
+		{
+			Log::error() << Log::Error << "JSON config: \"outputFormat\" has bad value!\n";
+			return false;
+		}
+	}
+
+	if (root.HasMember("yaraMatchingType"))
+	{
+		auto val = root["yaraMatchingType"].IsString()
+				? root["yaraMatchingType"].GetString() : std::string();
+		if (val == "exact") params.searchMode = SearchType::EXACT_MATCH;
+		else if (val == "similarity") params.searchMode = SearchType::MOST_SIMILAR;
+		else if (val == "sim-list") params.searchMode = SearchType::SIM_LIST;
+		else
+		{
+			Log::error() << Log::Error << "JSON config: \"yaraMatchingType\" has bad value!\n";
+			return false;
+		}
+	}
+
+	if (root.HasMember("noHashes"))
+	{
+		auto val = root["noHashes"].IsString()
+				? root["noHashes"].GetString() : std::string();
+		if (val == "default")
+		{
+			params.loadFlags = LoadFlags::NONE;
+		}
+		else if (val == "all")
+		{
+			params.loadFlags = static_cast<LoadFlags>(params.loadFlags
+					| LoadFlags::NO_FILE_HASHES
+					| LoadFlags::NO_VERBOSE_HASHES);
+		}
+		else if (val == "file")
+		{
+			params.loadFlags = static_cast<LoadFlags>(params.loadFlags
+					| LoadFlags::NO_FILE_HASHES);
+		}
+		else if (val == "verbose")
+		{
+			params.loadFlags = static_cast<LoadFlags>(params.loadFlags
+									| LoadFlags::NO_VERBOSE_HASHES);
+		}
+		else
+		{
+			Log::error() << Log::Error << "JSON config: \"noHashes\" has bad value!\n";
+			return false;
+		}
+	}
+
+	if (!jsonGetPathArray(root, "externalMalwareYaraRules", params.yaraMalwarePaths, configPath)) return false;
+	if (!jsonGetPathArray(root, "externalCryptoYaraRules", params.yaraCryptoPaths, configPath)) return false;
+	if (!jsonGetPathArray(root, "externalOtherYaraRules", params.yaraOtherPaths, configPath)) return false;
+
+	params.internalDatabase = retdec::serdes::deserializeBool(root, "useInternalSignatureDb", params.internalDatabase);
+	params.externalDatabase = retdec::serdes::deserializeBool(root, "useExternalSignatureDb", params.externalDatabase);
+	params.verbose = retdec::serdes::deserializeBool(root, "verbose", params.verbose);
+	params.explanatory = retdec::serdes::deserializeBool(root, "explanatory", params.explanatory);
+	params.maxMemoryHalfRAM = retdec::serdes::deserializeBool(root, "maxMemoryHalf", params.maxMemoryHalfRAM);
+	params.analysisTime = retdec::serdes::deserializeBool(root, "analysisTime", params.analysisTime);
+
+	if (root.HasMember("loadStrings"))
+	{
+		if (root["loadStrings"].IsBool())
+		{
+			if (root["loadStrings"].GetBool())
+				params.loadFlags = static_cast<LoadFlags>(params.loadFlags
+					| LoadFlags::DETECT_STRINGS);
+			else
+				params.loadFlags = static_cast<LoadFlags>(params.loadFlags
+					& (~LoadFlags::DETECT_STRINGS));
+		}
+		else
+		{
+			Log::error() << Log::Error << "JSON config: \"loadStrings\" has bad value!\n";
+			return false;
+		}
+	}
+
+	if (root.HasMember("dlls"))
+	{
+		if (root["dlls"].IsString())
+		{
+			if (root["dlls"].GetStringLength())
+			{
+				auto path = fixRelativePath(
+						root["dlls"].GetString(),
+						configPath
+				);
+				if (fs::exists(path))
+				{
+					params.dllListFile = path;
+				}
+			}
+		}
+		else
+		{
+			Log::error() << Log::Error << "JSON config: \"dlls\" has bad value!\n";
+			return false;
+		}
+	}
+
+	params.epBytesCount = retdec::serdes::deserializeUint64(root, "epBytes", params.epBytesCount);
+	params.maxMemory = retdec::serdes::deserializeUint64(root, "maxMemory", params.maxMemory);
+
+	return true;
+}
+
+/**
+ * Config file processing.
+ * @param params Structure for storing information
+ * @param configPath Path to fileinfo config file to read.
+ *                   Default path relative to fileinfo binary is used of not
+ *                   specified.
+ * @return @c true if processing was completed successfully, @c false otherwise
+ */
+bool doConfigFile(ProgParams& params, const std::string& configPath = "")
+{
+	fs::path cp;
+
+	if (configPath.empty())
+	{
+		auto binpath = retdec::utils::getThisBinaryDirectoryPath();
+		cp = fs::path(fs::canonical(binpath).parent_path());
+		cp.append("share");
+		cp.append("retdec");
+		cp.append("fileinfo-config.json");
+
+		if (!fs::exists(cp))
+		{
+			// If the default config is not found, we ignore it.
+			return true;
+		}
+	}
+	else
+	{
+		cp = fs::path(configPath);
+
+		// If the specified config file is not found, we consider it an error.
+		if (!fs::exists(cp))
+		{
+			return false;
+		}
+	}
+
+	std::ifstream jsonFile(cp.string(), std::ios::in | std::ios::binary);
+	if (!jsonFile)
+	{
+		return false;
+	}
+	std::string jsonContent;
+	jsonFile.seekg(0, std::ios::end);
+	jsonContent.resize(jsonFile.tellg());
+	jsonFile.seekg(0, std::ios::beg);
+	jsonFile.read(&jsonContent[0], jsonContent.size());
+	jsonFile.close();
+
+	return doConfigString(params, jsonContent, cp.string());
 }
 
 /**
@@ -215,8 +517,11 @@ bool doParams(int argc, char **_argv, ProgParams &params)
 
 	std::vector<std::string> argv;
 
-	std::set<std::string> withArgs = {"malware", "m", "crypto", "C", "other",
-			"o", "config", "c", "no-hashes", "max-memory", "ep-bytes", "dlls"};
+	std::set<std::string> withArgs = {
+			"malware", "m", "crypto", "C", "other", "o", "config",
+			"fileinfo-config", "c", "no-hashes", "max-memory", "ep-bytes",
+			"dlls"
+	};
 	for (int i = 1; i < argc; ++i)
 	{
 		std::string a = _argv[i];
@@ -241,6 +546,20 @@ bool doParams(int argc, char **_argv, ProgParams &params)
 		argv.push_back(a);
 	}
 
+	// In the first pass, we process possible configuration file, so that
+	// options it contains can be overwritten by ordinary command line options.
+	//
+	for (std::size_t i = 0; i < argv.size(); ++i)
+	{
+		if (argv[i] == "--fileinfo-config")
+		{
+			if(!doConfigFile(params, getParamOrDie(argv, i)))
+			{
+				return false;
+			}
+		}
+	}
+
 	for (std::size_t i = 0; i < argv.size(); ++i)
 	{
 		std::string c = argv[i];
@@ -248,6 +567,11 @@ bool doParams(int argc, char **_argv, ProgParams &params)
 		if (c == "-h" || c == "--help")
 		{
 			printHelp();
+			exit(EXIT_SUCCESS);
+		}
+		else if (c == "--version")
+		{
+			Log::info() << version::getVersionStringLong() << "\n";
 			exit(EXIT_SUCCESS);
 		}
 		else if (c == "-x" || c == "--exact")
@@ -286,6 +610,10 @@ bool doParams(int argc, char **_argv, ProgParams &params)
 		{
 			params.explanatory = true;
 		}
+		else if (c == "--analysis-time")
+		{
+			params.analysisTime = true;
+		}
 		else if (c == "-S" || c == "--strings")
 		{
 			params.loadFlags = static_cast<LoadFlags>(params.loadFlags
@@ -303,6 +631,11 @@ bool doParams(int argc, char **_argv, ProgParams &params)
 		{
 			params.configFile = getParamOrDie(argv, i);
 			params.generateConfigFile = !params.configFile.empty();
+		}
+		else if (c == "--fileinfo-config")
+		{
+			// Ignore - already processed in the first pass.
+			getParamOrDie(argv, i);
 		}
 		else if (c == "-o" || c == "--other")
 		{
@@ -411,9 +744,16 @@ void limitMaximalMemoryIfRequested(const ProgParams& params)
 int main(int argc, char* argv[])
 {
 	ProgParams params;
+	if(!doConfigFile(params))
+	{
+		Log::error() << getErrorMessage(ReturnCode::ARG) << "\n\n";
+		printHelp();
+		return static_cast<int>(ReturnCode::ARG);
+	}
+
 	if(!doParams(argc, argv, params))
 	{
-		std::cerr << getErrorMessage(ReturnCode::ARG) << "\n\n";
+		Log::error() << getErrorMessage(ReturnCode::ARG) << "\n\n";
 		printHelp();
 		return static_cast<int>(ReturnCode::ARG);
 	}
@@ -443,6 +783,7 @@ int main(int argc, char* argv[])
 	FileInformation fileinfo;
 	FileDetector *fileDetector = nullptr;
 	fileinfo.setPathToFile(params.filePath);
+	fileinfo.setAnalysisTime(timestampToDate(getCurrentTimestamp()));
 	fileinfo.setFileFormatEnum(fileFormat);
 	ErrorHandlerInfo hInfo { &params, &fileinfo };
 	llvm::install_fatal_error_handler(fatalErrorHandler, &hInfo);
@@ -503,11 +844,11 @@ int main(int argc, char* argv[])
 	// print results on standard output
 	if(params.plainText)
 	{
-		PlainPresentation(fileinfo, params.verbose, params.explanatory).present();
+		PlainPresentation(fileinfo, params.verbose, params.explanatory, params.analysisTime).present();
 	}
 	else
 	{
-		JsonPresentation(fileinfo, params.verbose).present();
+		JsonPresentation(fileinfo, params.verbose, params.analysisTime).present();
 	}
 
 	// generate configuration file
@@ -517,7 +858,7 @@ int main(int argc, char* argv[])
 		auto config = ConfigPresentation(fileinfo, params.configFile);
 		if(!config.present())
 		{
-			std::cerr << "Error: loading of config failed: " << config.getErrorMessage() << "\n";
+			Log::error() << "Error: loading of config failed: " << config.getErrorMessage() << "\n";
 			res = ReturnCode::FILE_PROBLEM;
 		}
 	}

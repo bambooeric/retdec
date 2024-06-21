@@ -542,7 +542,7 @@ llvm::Function* Decoder::splitFunctionOn(
 		std::string name = _names->getPreferredNameForAddress(splitAddr);
 		if (name.empty())
 		{
-			name = names::generateFunctionName(splitAddr, _config->getConfig().isIda());
+			name = names::generateFunctionName(splitAddr);
 		}
 
 		Function* oldFnc = splitBb->getParent();
@@ -599,7 +599,8 @@ llvm::Function* Decoder::splitFunctionOn(
 		// Test.
 		for (auto* s : successors(&b))
 		{
-			if (b.getParent() != s->getParent())
+			if (b.getParent() != s->getParent()
+					&& fs::exists(_config->getOutputDirectory()))
 			{
 				dumpModuleToFile(_module, _config->getOutputDirectory());
 			}

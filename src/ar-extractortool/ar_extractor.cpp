@@ -4,18 +4,20 @@
  * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
 
-#include <iostream>
 #include <limits>
 #include <vector>
 
 #include <rapidjson/document.h>
 #include <rapidjson/prettywriter.h>
 
-#include "retdec/utils/filesystem_path.h"
+#include "retdec/utils/filesystem.h"
+#include "retdec/utils/io/log.h"
+#include "retdec/utils/version.h"
 #include "retdec/ar-extractor/archive_wrapper.h"
 #include "retdec/ar-extractor/detection.h"
 
 using namespace retdec::utils;
+using namespace retdec::utils::io;
 using namespace retdec::ar_extractor;
 using namespace rapidjson;
 
@@ -43,14 +45,17 @@ bool isJson = false;
 /**
  * Print usage.
  *
- * @param outputStream target stream
+ * @param log usage logger object
  */
-void printUsage(
-	std::ostream &outputStream)
+void printUsage(Logger& log)
 {
 
-	outputStream << "Usage: ar_extractor [OPTIONS] FILE\n\n"
+	log << "Usage: ar_extractor [OPTIONS] FILE\n\n"
 	"Options:\n\n"
+	"-h --help\n"
+	"    Show this help.\n\n"
+	"--version\n"
+	"    Show RetDec version.\n\n"
 	"--arch-magic\n"
 	"    Check if file starts with archive magic constants.\n"
 	"    Exit code = 0 if archive magic, 1 otherwise.\n\n"
@@ -99,7 +104,7 @@ void printUsage(
 void printErrorPlainText(
 	const std::string &message)
 {
-	std::cerr << "Error: " << message << ".\n";
+	Log::error() << Log::Error << message << ".\n";
 }
 
 /**
@@ -120,7 +125,7 @@ void printErrorJson(
 	PrettyWriter<StringBuffer> writer(buffer);
 	errorFile.Accept(writer);
 
-	std::cerr << buffer.GetString() << "\n";
+	Log::error() << buffer.GetString() << "\n";
 }
 
 /**
@@ -163,7 +168,7 @@ int printTable(
 		}
 	}
 
-	std::cout << result;
+	Log::info() << result;
 	return 0;
 }
 
@@ -213,7 +218,11 @@ int processArguments(
 		const auto &arg = args[i];
 
 		if (arg == "-h" || arg == "--help") {
-			printUsage(std::cout);
+			printUsage(Log::get(Log::Type::Info));
+			return 0;
+		}
+		else if (arg == "--version") {
+			Log::info() << version::getVersionStringLong() << "\n";
 			return 0;
 		}
 		else if (arg == "-o" || arg == "--output") {
@@ -275,7 +284,7 @@ int processArguments(
 			}
 		}
 		else {
-			if (FilesystemPath(arg).isFile()) {
+			if (fs::is_regular_file(arg)) {
 				if (inputArchive.empty()) {
 					inputArchive = arg;
 				}
@@ -339,7 +348,7 @@ int processArguments(
 			return printTable(archive, fixNames, isNum);
 
 		case ACTION::OBJECT_COUNT:
-			std::cout << archive.getNumberOfObjects() << "\n";
+			Log::info() << archive.getNumberOfObjects() << "\n";
 			return 0;
 
 		case ACTION::EXTRACT_NAME:

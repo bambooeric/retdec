@@ -6,16 +6,16 @@ add_library(pelib STATIC
 	DebugDirectory.cpp
 	ExportDirectory.cpp
 	IatDirectory.cpp
+	ImageLoader.cpp
 	InputBuffer.cpp
-	MzHeader.cpp
 	OutputBuffer.cpp
 	PeFile.cpp
-	PeHeader.cpp
 	PeLibAux.cpp
 	RelocationsDirectory.cpp
 	ResourceDirectory.cpp
 	RichHeader.cpp
 	SecurityDirectory.cpp
+	ConfigDirectory.cpp
 )
 add_library(retdec::pelib ALIAS pelib)
 

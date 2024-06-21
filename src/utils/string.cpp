@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstddef>
 #include <functional>
+#include <regex>
 #include <sstream>
 
 #include "retdec/utils/conversion.h"
@@ -48,17 +49,17 @@ bool isNonasciiChar(unsigned char c) {
 *        their hexadecimal values.
 */
 std::string replaceChars(const std::string &str, bool (* predicate)(unsigned char)) {
-	std::stringstream result;
-	const std::size_t maxC = (1 << (sizeof(std::string::value_type) * CHAR_BIT)) - 1;
-	for (const auto &c : str) {
+	std::string prefix("\\x");
+	std::string result;
+	result.reserve(str.size() * 4);
+	for (const auto c : str) {
 		if (predicate(c)) {
-			const auto val = numToStr<std::size_t>(c & maxC, std::hex);
-			result << "\\x" << std::setw(2) << std::setfill('0') << val;
+			result += prefix + byteToHexString(c, false);
 		} else {
-			result << c;
+			result += c;
 		}
 	}
-	return result.str();
+	return result;
 }
 
 //
@@ -441,8 +442,8 @@ std::string unicodeToAscii(const std::uint8_t *bytes, std::size_t nBytes)
 		else
 		{
 			const std::size_t maxC = (1 << (sizeof(std::string::value_type) * CHAR_BIT)) - 1;
-			const auto val1 = numToStr<std::size_t>(bytes[i] & maxC, std::hex);
-			const auto val2 = numToStr<std::size_t>(bytes[i + 1] & maxC, std::hex);
+			const auto val1 = intToHexString(bytes[i] & maxC);
+			const auto val2 = intToHexString(bytes[i + 1] & maxC);
 			result << "\\x" << std::setw(2) << std::setfill('0') << val1;
 			result << "\\x" << std::setw(2) << std::setfill('0') << val2;
 		}
@@ -487,8 +488,8 @@ std::string unicodeToAscii(const std::uint8_t *bytes, std::size_t nBytes, std::s
 		else
 		{
 			const std::size_t maxC = (1 << (sizeof(std::string::value_type) * CHAR_BIT)) - 1;
-			const auto val1 = numToStr<std::size_t>(bytes[i] & maxC, std::hex);
-			const auto val2 = numToStr<std::size_t>(bytes[i + 1] & maxC, std::hex);
+			const auto val1 = intToHexString(bytes[i] & maxC);
+			const auto val2 = intToHexString(bytes[i + 1] & maxC);
 			result << "\\x" << std::setw(2) << std::setfill('0') << val1;
 			result << "\\x" << std::setw(2) << std::setfill('0') << val2;
 		}
@@ -676,6 +677,23 @@ bool endsWith(const std::string &str, const std::string &withWhat) {
 */
 bool endsWith(const std::string &str, char withWhat) {
 	return !str.empty() && str.back() == withWhat;
+}
+
+/**
+* @return @c true if @a str ends with any of the suffixes in @a withWhat,
+         @c false otherwise
+*/
+bool endsWith(const std::string &str, const std::set<std::string>& withWhat)
+{
+	for (auto& s : withWhat)
+	{
+		if (endsWith(str, s))
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 /**
@@ -1117,15 +1135,6 @@ std::string removeSuffixRet(const std::string &n, const std::string &suffix) {
 }
 
 /**
-* @brief Returns hex-string form of the given integer.
-*/
-std::string toHexString(unsigned long long val) {
-	std::stringstream ss;
-	ss << std::hex << val;
-	return ss.str();
-}
-
-/**
 * @brief Replaces all special symbols by their normalized equivalent.
 *
 * @param[in] name Input string.
@@ -1378,6 +1387,27 @@ std::string removeComments(const std::string& str, char commentChar)
 		}
 	}
 	return ret;
+}
+
+/**
+ * Search for version stored in input string
+ * @param input Input string
+ * @return Found version or empty string if no version found.
+ *
+ * A version is considered to be a substring which consisting of numbers
+ * (and dots). If input string contains more versions, result contains only
+ * the first one.
+ */
+std::string extractVersion(const std::string& input)
+{
+	static std::regex e("([0-9]+\\.)+[0-9]+");
+	std::smatch match;
+	if (regex_search(input, match, e))
+	{
+		return match.str();
+	}
+
+	return std::string();
 }
 
 } // namespace utils

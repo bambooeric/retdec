@@ -18,8 +18,9 @@ namespace fileinfo {
 class PlainPresentation : public FilePresentation
 {
 	private:
-		bool verbose;     ///< @c true - print all information about file
-		bool explanatory; ///< @c true - print explanatory notes
+		bool verbose;      ///< @c true - print all information about file
+		bool explanatory;  ///< @c true - print explanatory notes
+		bool analysisTime; ///< @c true - print when the analysis was done
 
 		/// @name Auxiliary presentation methods
 		/// @{
@@ -34,9 +35,10 @@ class PlainPresentation : public FilePresentation
 		void presentVisualBasicObjects() const;
 		void presentNotes() const;
 		void presentCore() const;
+		void presentSignatures() const;
 		/// @}
 	public:
-		PlainPresentation(FileInformation &fileinfo_, bool verbose_, bool explanatory_);
+		PlainPresentation(FileInformation &fileinfo_, bool verbose_, bool explanatory_, bool analysisTime_);
 
 		virtual bool present() override;
 };

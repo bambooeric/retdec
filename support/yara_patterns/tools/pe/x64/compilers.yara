@@ -117,6 +117,66 @@ rule aut2exe_33143 {
 		$1 at 0x400
 }
 
+rule aut2exe_uv_01 {
+	meta:
+		tool = "C"
+		name = "Aut2Exe"
+		language = "AutoIt"
+		bytecode = true
+	strings:
+		$1 = ">AUTOIT SCRIPT<"
+		$2 = ">AUTOIT SCRIPT<" wide
+		$3 = ">AUTOIT UNICODE SCRIPT<" wide
+	condition:
+		pe.is_64bit() and
+		for 1 of them : (
+			@ > pe.sections[pe.section_index(".rdata")].raw_data_offset and
+			@ < pe.sections[pe.section_index(".rdata")].raw_data_offset +
+			pe.sections[pe.section_index(".rdata")].raw_data_size
+		)
+}
+
+rule autohotkey_uv_01 {
+	meta:
+		tool = "C"
+		name = "AHK2Exe"
+		language = "AutoHotKey"
+		bytecode = true
+	strings:
+		$0 = "Hotkeys/hotstrings are not allowed inside functions." wide ascii
+		$1 = "IfWin should be #IfWin." wide ascii
+		$2 = "This hotstring is missing its abbreviation." wide ascii
+		$3 = "Duplicate hotkey." wide ascii
+		$4 = ">AUTOHOTKEY SCRIPT<" wide ascii
+    condition:
+        pe.is_64bit()
+		and
+		pe.number_of_resources > 0
+		and ((
+					(@4 > pe.sections[pe.section_index(".rdata")].raw_data_offset
+					and
+					@4 < pe.sections[pe.section_index(".rdata")].raw_data_offset +
+					pe.sections[pe.section_index(".rdata")].raw_data_size)
+				or
+				(for 1 i in (0 .. pe.number_of_resources) : (
+					pe.resources[i].name_string matches />AUTOHOTKEY SCRIPT</))
+			)
+			or
+			(3 of ($0,$1,$2,$3))
+		)
+}
+
+rule f2ko_bat2exe_uv_01 {
+	meta:
+		tool = "C"
+		name = "F2KO Bat2Exe"
+		pattern = "4883EC??49C7C0????????4831D248B9????????????????E8????????4831C9E8????????4889??????????4D31C048C7C2001000004831C9E8????????4889"
+	strings:
+		$1 = { 48 83 EC ?? 49 C7 C0 ?? ?? ?? ?? 48 31 D2 48 B9 ?? ?? ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 31 C9 E8 ?? ?? ?? ?? 48 89 ?? ?? ?? ?? ?? 4D 31 C0 48 C7 C2 00 10 00 00 48 31 C9 E8 ?? ?? ?? ?? 48 89 }
+	condition:
+		$1 at pe.entry_point
+}
+
 rule msvc_general
 {
 	meta:
@@ -154,4 +214,22 @@ rule gc_mingw
 		$1 = { 48 83 EC 28 48 8B 05 ?5 ?? ?? 00 C7 00 00 00 00 00 E8 ?A ?? ?? 00 E8 95 FC FF FF 90 90 48 83 C4 28 C3 90 90 90 90 90 90 90 90 90 90 90 90 90 90 55 48 89 E5 5D C3 66 2E 0F 1F 84 00 00 00 00 00 55 48 89 E5 48 83 EC 20 48 83 3D ?0 ?? ?? 00 00 74 30 48 8D 0D A7 ?A ?? 00 FF 15 ?? ?? ?? 00 48 85 C0 74 2F }
 	condition:
 		$1 at pe.entry_point
+}
+
+rule gcc_QB64
+{
+	meta:
+		tool = "C"
+		name = "QB64"
+		language = "Basic"
+		reference = "https://qb64.com/"
+	strings:
+		$s01 = "www.qb64.org/ip.php"
+		$s10 = "FREEGLUT_dummy"
+	condition:
+		filesize > 1500000 and
+		pe.number_of_sections >= 8 and
+		pe.data_directories[9].size == 0x28 and
+		pe.imports(/^OPENGL32\.dll$/i, /^glBegin$/i) and
+		all of them
 }

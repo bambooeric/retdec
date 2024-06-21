@@ -23,7 +23,6 @@ add_library(bin2llvmir STATIC
 	optimizations/decoder/patterns.cpp
 	optimizations/decoder/powerpc.cpp
 	optimizations/decoder/x86.cpp
-	optimizations/dsm_generator/dsm_generator.cpp
 	optimizations/dump_module/dump_module.cpp
 	optimizations/idioms/idioms.cpp
 	optimizations/idioms/idioms_abstract.cpp
@@ -59,6 +58,10 @@ add_library(bin2llvmir STATIC
 	optimizations/stack/stack.cpp
 	optimizations/stack_pointer_ops/stack_pointer_ops.cpp
 	optimizations/value_protect/value_protect.cpp
+	optimizations/writer_bc/writer_bc.cpp
+	optimizations/writer_config/writer_config.cpp
+	optimizations/writer_dsm/writer_dsm.cpp
+	optimizations/writer_ll/writer_ll.cpp
 	optimizations/syscalls/arm.cpp
 	optimizations/syscalls/arm64.cpp
 	optimizations/syscalls/mips.cpp
@@ -115,6 +118,8 @@ target_include_directories(bin2llvmir
 	PUBLIC
 		$<BUILD_INTERFACE:${RETDEC_INCLUDE_DIR}>
 		$<INSTALL_INTERFACE:${RETDEC_INSTALL_INCLUDE_DIR}>
+	PRIVATE
+		$<BUILD_INTERFACE:${RETDEC_DEPS_DIR}/eigen>
 )
 
 target_link_libraries(bin2llvmir
@@ -124,13 +129,13 @@ target_link_libraries(bin2llvmir
 		retdec::debugformat
 		retdec::demangler
 		retdec::stacofin
+		retdec::cpdetect
 		retdec::loader
 		retdec::fileformat
 		retdec::config
 		retdec::ctypesparser
 		retdec::common
 		retdec::utils
-		retdec::llvm-support
 		retdec::deps::llvm
 )
 

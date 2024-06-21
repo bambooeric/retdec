@@ -55,6 +55,11 @@ std::string ImportTable::getImphashSha256() const
 	return table ? table->getImphashSha256() : "";
 }
 
+std::string ImportTable::getImphashTlsh() const
+{
+	return table ? table->getImpHashTlsh() : "";
+}
+
 /**
  * Get import
  * @param position Index of selected import from table (indexed from 0)
@@ -128,7 +133,7 @@ std::string ImportTable::getImportAddressStr(std::size_t position, std::ios_base
  */
 std::string ImportTable::getImportOrdinalNumberStr(std::size_t position, std::ios_base &(* format)(std::ios_base &)) const
 {
-	unsigned long long ordinal;
+	std::uint64_t ordinal;
 	const auto *record = table ? table->getImport(position) : nullptr;
 	return record && record->getOrdinalNumber(ordinal) ? getNumberAsString(ordinal, format) : "";
 }

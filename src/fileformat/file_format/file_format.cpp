@@ -7,27 +7,29 @@
 #include <algorithm>
 #include <cassert>
 #include <climits>
+#include <cstdint>
 #include <cstring>
 #include <functional>
-#include <iostream>
 #include <sstream>
 
-#include "retdec/crypto/crypto.h"
 #include "retdec/utils/conversion.h"
 #include "retdec/utils/file_io.h"
 #include "retdec/utils/string.h"
 #include "retdec/utils/system.h"
+#include "retdec/utils/io/log.h"
 #include "retdec/fileformat/file_format/file_format.h"
 #include "retdec/fileformat/utils/byte_array_buffer.h"
 #include "retdec/fileformat/file_format/intel_hex/intel_hex_format.h"
 #include "retdec/fileformat/file_format/raw_data/raw_data_format.h"
 #include "retdec/fileformat/types/strings/character_iterator.h"
 #include "retdec/fileformat/utils/conversions.h"
+#include "retdec/fileformat/utils/crypto.h"
 #include "retdec/fileformat/utils/file_io.h"
 #include "retdec/fileformat/utils/other.h"
 #include "retdec/pelib/PeLibInc.h"
 
 using namespace retdec::utils;
+using namespace retdec::utils::io;
 using namespace PeLib;
 
 namespace retdec {
@@ -82,7 +84,7 @@ bool isAddressFromRegion(const SecSeg *actualRegion, const SecSeg *newRegion, st
 		return false;
 	}
 
-	unsigned long long newRegionSize;
+	unsigned long long newRegionSize = 0;
 	if(!newRegion->getSizeInMemory(newRegionSize))
 	{
 		newRegionSize = newRegion->getSizeInFile();
@@ -197,9 +199,9 @@ void FileFormat::init()
 	}
 	else
 	{
-		crc32 = retdec::crypto::getCrc32(bytes.data(), bytes.size());
-		md5 = retdec::crypto::getMd5(bytes.data(), bytes.size());
-		sha256 = retdec::crypto::getSha256(bytes.data(), bytes.size());
+		crc32 = retdec::fileformat::getCrc32(bytes.data(), bytes.size());
+		md5 = retdec::fileformat::getMd5(bytes.data(), bytes.size());
+		sha256 = retdec::fileformat::getSha256(bytes.data(), bytes.size());
 	}
 	initStream();
 }
@@ -314,9 +316,9 @@ void FileFormat::computeSectionTableHashes()
 
 	if(!data.empty())
 	{
-		sectionCrc32 = retdec::crypto::getCrc32(data.data(), data.size());
-		sectionMd5 = retdec::crypto::getMd5(data.data(), data.size());
-		sectionSha256 = retdec::crypto::getSha256(data.data(), data.size());
+		sectionCrc32 = retdec::fileformat::getCrc32(data.data(), data.size());
+		sectionMd5 = retdec::fileformat::getMd5(data.data(), data.size());
+		sectionSha256 = retdec::fileformat::getSha256(data.data(), data.size());
 	}
 }
 
@@ -333,7 +335,7 @@ void FileFormat::setLoadedBytes(std::vector<unsigned char> *lBytes)
 
 /**
  * If fileformat is Intel HEX or raw binary then it does not contain
- * critical information like architecture, endianness or word size.
+ * critical information like architecture, endianness or std::uint16_t size.
  * However, fileformat users expect it to contain this information.
  * Therefore, this method needs to be called to set these critical information.
  */
@@ -1131,7 +1133,7 @@ std::size_t FileFormat::bytesFromNibblesRounded(std::size_t nibbles) const
  *
  * If method returns @c false, @a result is left unchanged
  */
-bool FileFormat::getOffsetFromAddress(unsigned long long &result, unsigned long long address) const
+bool FileFormat::getOffsetFromAddress(std::uint64_t &result, std::uint64_t address) const
 {
 	const auto *secSeg = getSectionOrSegmentFromAddress(address);
 	if(!secSeg)
@@ -1157,7 +1159,7 @@ bool FileFormat::getOffsetFromAddress(unsigned long long &result, unsigned long 
  *
  * If method returns @c false, @a result is left unchanged
  */
-bool FileFormat::getAddressFromOffset(unsigned long long &result, unsigned long long offset) const
+bool FileFormat::getAddressFromOffset(std::uint64_t &result, std::uint64_t offset) const
 {
 	const auto *secSeg = getSectionOrSegmentFromOffset(offset);
 	if(!secSeg)
@@ -1210,7 +1212,7 @@ bool FileFormat::getBytes(std::vector<std::uint8_t> &result, unsigned long long 
  */
 bool FileFormat::getEpBytes(std::vector<std::uint8_t> &result, unsigned long long numberOfBytes) const
 {
-	unsigned long long epOffset;
+	std::uint64_t epOffset;
 	if(stateIsValid && getEpOffset(epOffset))
 	{
 		return getBytes(result, epOffset, numberOfBytes);
@@ -1246,7 +1248,7 @@ bool FileFormat::getHexBytes(std::string &result, unsigned long long offset, uns
  */
 bool FileFormat::getHexEpBytes(std::string &result, unsigned long long numberOfBytes) const
 {
-	unsigned long long epOffset;
+	std::uint64_t epOffset;
 	if(stateIsValid && getEpOffset(epOffset))
 	{
 		return getHexBytes(result, epOffset, numberOfBytes);
@@ -1328,9 +1330,10 @@ bool FileFormat::isObjectStretchedOverSections(std::size_t addr, std::size_t siz
  * Get information about section containing entry point
  * @return Pointer to EP section if file has entry point and EP section was detected, @c nullptr otherwise
  */
+ // useless?
 const Section* FileFormat::getEpSection()
 {
-	unsigned long long ep;
+	std::uint64_t ep;
 	if(!getEpOffset(ep))
 	{
 		return nullptr;
@@ -1414,7 +1417,7 @@ const Section* FileFormat::getLastButOneSection() const
  */
 const Segment* FileFormat::getEpSegment()
 {
-	unsigned long long epAddress;
+	std::uint64_t epAddress;
 	if(!getEpAddress(epAddress))
 	{
 		return nullptr;
@@ -2061,8 +2064,8 @@ bool FileFormat::get8ByteOffset(std::uint64_t offset, std::uint64_t &res, retdec
 
 /**
  * Get long double from the specified offset
- * If system has 80-bit (10-byte) long double, copy data directly.
- * Else convert 80-bit (10-byte) long double into 64-bit (8-byte) double.
+ * If system has 80-bit (10 - byte) long double, copy data directly.
+ * Else convert 80-bit (10 - byte) long double into 64-bit (8 - uint8_t) double.
  * @param offset Offset to get double from
  * @param res Result double
  * @return Status of operation (@c true if all is OK, @c false otherwise)
@@ -2336,7 +2339,7 @@ void FileFormat::dump()
 {
 	std::string output;
 	dump(output);
-	std::cout << output;
+	Log::info() << output;
 }
 
 /**
@@ -2433,13 +2436,13 @@ void FileFormat::dump(std::string &dumpFile)
 	ret << "; Endianness: " << sEndian << "\n";
 	ret << "; Type: " << sType << "\n";
 
-	unsigned long long addr;
+	std::uint64_t addr;
 	if(getEpAddress(addr))
 	{
 		ret << "; Entry point address: " << std::hex << addr << "\n";
 	}
 
-	unsigned long long offset;
+	std::uint64_t offset;
 	if(getEpOffset(offset))
 	{
 		ret << "; Entry point offset: " << offset << "\n";
@@ -2561,7 +2564,7 @@ void FileFormat::dumpRegionsValidity()
 {
 	std::string output;
 	dumpRegionsValidity(output);
-	std::cout << output;
+	Log::info() << output;
 }
 
 /**
@@ -2603,7 +2606,7 @@ void FileFormat::dumpResourceTree()
 {
 	std::string output;
 	dumpResourceTree(output);
-	std::cout << output;
+	Log::info() << output;
 }
 
 void FileFormat::dumpResourceTree(std::string &dumpStr)

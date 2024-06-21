@@ -104,7 +104,7 @@ void PeDetector::getFileFlags()
  */
 void PeDetector::getDllFlags()
 {
-	unsigned long long flags;
+	std::uint64_t flags;
 	if(!peParser->getDllFlags(flags))
 	{
 		return;
@@ -184,7 +184,7 @@ void PeDetector::getCoffSymbols()
  */
 void PeDetector::getRelocationTableInfo()
 {
-	unsigned long long relocs = 0;
+	std::uint64_t relocs = 0;
 	if(peParser->getNumberOfRelocations(relocs))
 	{
 		RelocationTable relTable;
@@ -344,7 +344,7 @@ void PeDetector::getDotnetInfo()
  */
 void PeDetector::getVisualBasicInfo()
 {
-	unsigned long long version;
+	std::uint64_t version;
 	if (!peParser->isVisualBasic(version))
 	{
 		return;
@@ -355,21 +355,21 @@ void PeDetector::getVisualBasicInfo()
 
 void PeDetector::detectFileClass()
 {
-	switch(peParser->getPeClass())
+	switch(peParser->getBits())
 	{
-		case PEFILE32:
-			fileInfo.setFileClass("32-bit");
-			break;
-		case PEFILE64:
+		case 64:
 			fileInfo.setFileClass("64-bit");
 			break;
-		default:;
+
+		case 32:
+			fileInfo.setFileClass("32-bit");
+			break;
 	}
 }
 
 void PeDetector::detectArchitecture()
 {
-	unsigned long long machineType = 0;
+	std::uint64_t machineType = 0;
 	if(!peParser->getMachineCode(machineType))
 	{
 		return;
@@ -502,6 +502,11 @@ void PeDetector::detectFileType()
 	fileInfo.setFileType(peParser->getTypeOfFile());
 }
 
+void PeDetector::getTimestamps()
+{
+	fileInfo.pe_timestamps = peParser->getTimestamps();
+}
+
 void PeDetector::getAdditionalInfo()
 {
 	getHeaderInfo();
@@ -511,7 +516,7 @@ void PeDetector::getAdditionalInfo()
 	getRelocationTableInfo();
 	getDotnetInfo();
 	getVisualBasicInfo();
-
+	getTimestamps();
 	/* In future we can detect more information about PE files:
 		- TimeDateStamp
 		- MajorLinkerVersion
@@ -543,7 +548,7 @@ void PeDetector::getAdditionalInfo()
  */
 retdec::cpdetect::CompilerDetector* PeDetector::createCompilerDetector() const
 {
-	return new PeCompiler(*peParser, cpParams, fileInfo.toolInfo);
+	return new CompilerDetector(*peParser, cpParams, fileInfo.toolInfo);
 }
 
 } // namespace fileinfo

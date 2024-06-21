@@ -13,7 +13,7 @@
 #include <rapidjson/document.h>
 #include <rapidjson/prettywriter.h>
 
-#include "retdec/utils/filesystem_path.h"
+#include "retdec/utils/filesystem.h"
 #include "retdec/utils/string.h"
 #include "retdec/ar-extractor/archive_wrapper.h"
 
@@ -85,7 +85,7 @@ bool checkError(
 	std::string &errorMessage)
 {
 	if (error) {
-		errorMessage = toString(std::move(error));
+		errorMessage = llvm::toString(std::move(error));
 		return true;
 	}
 
@@ -119,7 +119,7 @@ ArchiveWrapper::ArchiveWrapper(
 	Error error = Error::success();
 	archive = std::make_unique<Archive>(buffer.get()->getMemBufferRef(), error);
 	if (error) {
-		errorMessage = toString(std::move(error));
+		errorMessage = llvm::toString(std::move(error));
 		return;
 	}
 
@@ -252,7 +252,7 @@ bool ArchiveWrapper::extract(
 	const std::string &directory) const
 {
 	// Check if target directory exists if string not empty.
-	if (!directory.empty() && !FilesystemPath(directory).isDirectory()) {
+	if (!directory.empty() && !fs::is_directory(directory)) {
 		errorMessage = "Invalid target directory";
 		return false;
 	}

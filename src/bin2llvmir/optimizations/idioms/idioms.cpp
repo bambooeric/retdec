@@ -4,8 +4,6 @@
  * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
 
-#include <iostream>
-
 #include "retdec/bin2llvmir/optimizations/idioms/idioms.h"
 #include "retdec/bin2llvmir/optimizations/idioms/idioms_borland.h"
 #include "retdec/bin2llvmir/optimizations/idioms/idioms_common.h"
@@ -24,7 +22,7 @@ struct GlobalOpt;
 
 char Idioms::ID = 0;
 RegisterPass<Idioms> IdiomsRegistered(
-		"idioms",
+		"retdec-idioms",
 		"Instruction idioms optimization",
 		false,
 		false);

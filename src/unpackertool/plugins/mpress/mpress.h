@@ -8,7 +8,7 @@
 #define UNPACKERTOOL_PLUGINS_MPRESS_MPRESS_H
 
 #include "retdec/loader/loader.h"
-#include "retdec/pelib/PeLib.h"
+#include "retdec/pelib/PeFile.h"
 #include "retdec/utils/dynamic_buffer.h"
 #include "retdec/unpacker/plugin.h"
 
@@ -86,10 +86,10 @@ private:
 	MpressUnpackerStub detectUnpackerStubVersion();
 	MpressFixStub detectFixStubVersion(retdec::utils::DynamicBuffer& unpackedContent);
 	void saveFile(const std::string& fileName, retdec::utils::DynamicBuffer& content);
-	void copySectionFromOriginalFile(std::uint32_t origSectIndex, const std::string& newFileName, std::uint32_t newSectIndex);
+	void copySectionFromOriginalFile(std::uint32_t origSectIndex, std::ostream& outputFile, std::uint32_t newSectIndex);
 
 	std::unique_ptr<retdec::loader::Image> _file;
-	PeLib::PeFile32* _peFile;
+	PeLib::PeFileT * _peFile;
 	MpressUnpackerStub _unpackerStub;
 	MpressFixStub _fixStub;
 	const retdec::loader::Segment* _packedContentSect;

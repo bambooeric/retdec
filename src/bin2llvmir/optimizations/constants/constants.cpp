@@ -6,7 +6,6 @@
 
 #include <cassert>
 #include <iomanip>
-#include <iostream>
 #include <set>
 #include <sstream>
 #include <string>
@@ -36,7 +35,7 @@ namespace bin2llvmir {
 char ConstantsAnalysis::ID = 0;
 
 static RegisterPass<ConstantsAnalysis> X(
-		"constants",
+		"retdec-constants",
 		"Constants optimization",
 		false, // Only looks at CFG
 		false // Analysis Pass

@@ -1,4 +1,4 @@
-FROM ubuntu:bionic
+FROM ubuntu:focal AS builder
 
 RUN useradd -m retdec
 WORKDIR /home/retdec
@@ -9,7 +9,6 @@ RUN apt-get -y update && \
 	build-essential                                     \
 	cmake                                               \
 	git                                                 \
-	perl                                                \
 	python3                                             \
 	doxygen                                             \
 	graphviz                                            \
@@ -21,15 +20,30 @@ RUN apt-get -y update && \
 	automake                                            \
 	pkg-config                                          \
 	m4                                                  \
-	libtool
+	libtool                                             \
+	python-is-python3
 
 USER retdec
 RUN git clone https://github.com/avast/retdec && \
 	cd retdec && \
 	mkdir build && \
 	cd build && \
-	cmake .. -DCMAKE_INSTALL_PREFIX=/home/retdec/retdec-install && \
+	cmake .. -DCMAKE_INSTALL_PREFIX=/home/retdec/retdec-install -DCMAKE_LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/7/ -DCMAKE_BUILD_TYPE=Release && \
 	make -j$(nproc) && \
 	make install
 
-ENV PATH /home/retdec/retdec-install/bin:$PATH
+FROM ubuntu:focal
+
+RUN useradd -m retdec
+WORKDIR /home/retdec
+ENV HOME /home/retdec
+
+RUN apt-get update -y && \
+	DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    openssl graphviz upx python3
+
+USER retdec
+
+COPY --from=builder /home/retdec/retdec-install /retdec-install
+
+ENV PATH /retdec-install/bin:$PATH

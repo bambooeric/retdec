@@ -28,10 +28,12 @@ class JsonPresentation : public FilePresentation
 				rapidjson::ASCII<>>;
 
 	private:
-		bool verbose; ///< @c true - print all information about file
+		bool verbose;      ///< @c true - print all information about file
+		bool analysisTime; ///< @c true - print when the analysis was done
 
 		/// @name Auxiliary presentation methods
 		/// @{
+		void presentFileinfoVersion(Writer& writer) const;
 		void presentErrors(Writer& writer) const;
 		void presentLoaderError(Writer& writer) const;
 		void presentCompiler(Writer& writer) const;
@@ -62,7 +64,7 @@ class JsonPresentation : public FilePresentation
 				const IterativeSubtitleGetter &getter) const;
 		/// @}
 	public:
-		JsonPresentation(FileInformation &fileinfo_, bool verbose_);
+		JsonPresentation(FileInformation &fileinfo_, bool verbose_, bool analysisTime_);
 
 		virtual bool present() override;
 };

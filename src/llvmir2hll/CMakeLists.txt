@@ -152,8 +152,6 @@ add_library(llvmir2hll STATIC
 	optimizer/func_optimizer.cpp
 	optimizer/optimizer.cpp
 	optimizer/optimizer_manager.cpp
-	optimizer/optimizers/aggressive_deref_optimizer.cpp
-	optimizer/optimizers/aggressive_global_to_local_optimizer.cpp
 	optimizer/optimizers/bit_op_to_log_op_optimizer.cpp
 	optimizer/optimizers/bit_shift_optimizer.cpp
 	optimizer/optimizers/break_continue_return_optimizer.cpp
@@ -265,7 +263,6 @@ add_library(llvmir2hll STATIC
 	support/const_symbol_converter.cpp
 	support/expr_types_fixer.cpp
 	support/expression_negater.cpp
-	support/funcs_with_prefix_remover.cpp
 	support/global_vars_sorter.cpp
 	support/headers_for_declared_funcs.cpp
 	support/library_funcs_remover.cpp
@@ -295,6 +292,7 @@ add_library(llvmir2hll STATIC
 	var_renamer/var_renamers/readable_var_renamer.cpp
 	var_renamer/var_renamers/simple_var_renamer.cpp
 	var_renamer/var_renamers/unified_var_renamer.cpp
+	llvmir2hll.cpp
 )
 add_library(retdec::llvmir2hll ALIAS llvmir2hll)
 
@@ -310,7 +308,6 @@ target_link_libraries(llvmir2hll
 	PUBLIC
 		retdec::config
 		retdec::utils
-		retdec::llvm-support
 		retdec::deps::rapidjson
 		retdec::deps::llvm
 )
@@ -321,9 +318,7 @@ target_link_libraries(llvmir2hll
 #   fatal error C1128: number of sections exceeded object file format
 #                      limit: compile with /bigobj
 if(MSVC)
-	set_property(TARGET llvmir2hll
-		APPEND_STRING PROPERTY COMPILE_FLAGS " /bigobj"
-	)
+	target_compile_options(llvmir2hll PUBLIC "/bigobj")
 endif()
 
 set_target_properties(llvmir2hll

@@ -4,11 +4,13 @@
 * @copyright (c) 2020 Avast Software, licensed under the MIT license
 */
 
-#include <iostream>
 #include <optional>
 #include <queue>
 
+#include "retdec/utils/io/log.h"
 #include "retdec/bin2llvmir/optimizations/types_propagator/types_propagator.h"
+
+using namespace retdec::utils::io;
 
 namespace retdec {
 namespace bin2llvmir {
@@ -16,7 +18,7 @@ namespace bin2llvmir {
 char TypesPropagator::ID = 0;
 
 static llvm::RegisterPass<TypesPropagator> X(
-		"types-propagation",
+		"retdec-types-propagation",
 		"Data types propagation",
 		false, // Only looks at CFG
 		false // Analysis Pass
@@ -59,13 +61,13 @@ bool TypesPropagator::run()
 unsigned cntr = 0;
 for (auto& eq : _eqSets)
 {
-	std::cout << "set #" << cntr++ << std::endl;
+	Log::info() << "set #" << cntr++ << std::endl;
 	for (auto& v : eq)
 	{
 		if (llvm::isa<llvm::Function>(v))
-			std::cout << "\t\t" << v->getName().str() << std::endl;
+			Log::info() << "\t\t" << v->getName().str() << std::endl;
 		else
-			std::cout << "\t\t" << llvmObjToString(v) << std::endl;
+			Log::info() << "\t\t" << llvmObjToString(v) << std::endl;
 	}
 }
 exit(1);
@@ -97,7 +99,7 @@ if (fnc.getName() != "_func") continue;
 
 bool TypesPropagator::skipRootProcessing(llvm::Value* val)
 {
-	static auto* special = AsmInstruction::getLlvmToAsmGlobalVariable(_module);
+	auto* special = AsmInstruction::getLlvmToAsmGlobalVariable(_module);
 	return val == special
 			|| _abi->isRegister(val)
 			// || (llvm::isa<llvm::Instruction>(val)

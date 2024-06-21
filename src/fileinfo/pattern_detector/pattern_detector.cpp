@@ -7,10 +7,10 @@
 #include <regex>
 
 #include "retdec/utils/conversion.h"
-#include "retdec/utils/filesystem_path.h"
+#include "retdec/utils/filesystem.h"
 #include "retdec/utils/string.h"
 #include "fileinfo/pattern_detector/pattern_detector.h"
-#include "retdec/yaracpp/yara_detector/yara_detector.h"
+#include "retdec/yaracpp/yara_detector.h"
 
 using namespace retdec::utils;
 using namespace retdec::yaracpp;
@@ -85,7 +85,7 @@ void PatternDetector::createPatternFromRule(Pattern &pattern, const yaracpp::Yar
 		PatternMatch patMatch;
 		patMatch.setDataSize(match->getDataSize());
 		patMatch.setOffset(match->getOffset());
-		unsigned long long val;
+		std::uint64_t val;
 		if(fileParser && fileParser->getAddressFromOffset(val, match->getOffset()))
 		{
 			patMatch.setAddress(val);
@@ -250,7 +250,7 @@ void PatternDetector::saveCryptoRule(const yaracpp::YaraRule &rule)
 			}
 		}
 		patMatch.setOffset(match->getOffset());
-		unsigned long long val = 0;
+		std::uint64_t val = 0;
 		if(fileParser && fileParser->getAddressFromOffset(val, match->getOffset()))
 		{
 			patMatch.setAddress(val);
@@ -311,19 +311,21 @@ void PatternDetector::addFilePaths(const std::string &category, const std::set<s
 
 	for(const auto &item : paths)
 	{
-		FilesystemPath actDir(item);
-		if(actDir.isFile())
+		fs::path actDir(item);
+		if(fs::is_regular_file(actDir))
 		{
 			actCategory->second.insert(item);
 			continue;
 		}
 
-		for(const auto &file : actDir)
+		if (fs::is_directory(actDir))
+		for(auto& fileIt: fs::directory_iterator(actDir))
 		{
-			const auto path = file->getPath();
-			if(file->isFile() && (endsWith(path, ".yar") || endsWith(path, ".yara")))
+			auto file = fileIt.path();
+			if(fs::is_regular_file(file)
+					&& (endsWith(file.string(), ".yar") || endsWith(file.string(), ".yara")))
 			{
-				actCategory->second.insert(path);
+				actCategory->second.insert(file.string());
 			}
 		}
 	}

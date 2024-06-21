@@ -6,7 +6,6 @@
 
 #include <cassert>
 #include <iomanip>
-#include <iostream>
 #include <limits>
 
 #include <llvm/IR/CFG.h>
@@ -39,7 +38,7 @@ namespace bin2llvmir {
 char ParamReturn::ID = 0;
 
 static RegisterPass<ParamReturn> X(
-		"param-return",
+		"retdec-param-return",
 		"Function parameters and returns optimization",
 		false, // Only looks at CFG
 		false // Analysis Pass
@@ -99,6 +98,8 @@ bool ParamReturn::run()
 	collectAllCalls();
 //	dumpInfo();
 	filterCalls();
+//	dumpInfo();
+	propagateWrapped();
 //	dumpInfo();
 	applyToIr();
 
@@ -189,6 +190,13 @@ void ParamReturn::collectExtraData(DataFlowEntry* dataflow) const
 	if (fnc == nullptr)
 	{
 		return;
+	}
+
+	auto& config = _config->getConfig();
+	if (config.parameters.isSelectedDecodeOnly()) {
+		auto rdFnc = _config->getFunctionAddress(fnc);
+		auto isDecoded = config.parameters.selectedRanges.contains(rdFnc);
+		dataflow->setIsFullyDecoded(isDecoded);
 	}
 
 	// LTI info.
@@ -327,7 +335,7 @@ void ParamReturn::collectExtraData(DataFlowEntry* dataflow) const
 		std::vector<std::string> argNames;
 		for (auto& a : configFnc->parameters)
 		{
-			argTypes.push_back(nullptr);
+			argTypes.push_back(_abi->getDefaultType());
 			argNames.push_back(a.getName());
 		}
 		if (configFnc->parameters.size())
@@ -367,6 +375,7 @@ void ParamReturn::collectExtraData(DataFlowEntry* dataflow) const
 	//
 	if (CallInst* wrappedCall = getWrapper(fnc))
 	{
+		dataflow->setWrappedCall(wrappedCall);
 		auto* wf = wrappedCall->getCalledFunction();
 		auto* ltiFnc = _lti->getLlvmFunctionFree(wf->getName());
 		if (ltiFnc)
@@ -391,7 +400,6 @@ void ParamReturn::collectExtraData(DataFlowEntry* dataflow) const
 				dataflow->setVariadic();
 			}
 			dataflow->setRetType(ltiFnc->getReturnType());
-			dataflow->setWrappedCall(wrappedCall);
 
 			return;
 		}
@@ -401,7 +409,6 @@ void ParamReturn::collectExtraData(DataFlowEntry* dataflow) const
 		{
 			LOG << "wrapper: " << _demangler->demangleToString(wf->getName()) << std::endl;
 			modifyWithDemangledData(*dataflow, demFuncPair);
-			dataflow->setWrappedCall(wrappedCall);
 
 			return;
 		}
@@ -572,6 +579,7 @@ void ParamReturn::dumpInfo(const DataFlowEntry& de) const
 	auto wrappedCall = de.getWrappedCall();
 
 	LOG << "\n\t>|" << called->getName().str() << std::endl;
+	LOG << "\t>|&DataFlowEntry : " << &de << std::endl;
 	LOG << "\t>|fnc call : " << de.isFunction() << std::endl;
 	LOG << "\t>|val call : " << de.isValue() << std::endl;
 	LOG << "\t>|variadic : " << de.isVariadic() << std::endl;
@@ -580,6 +588,9 @@ void ParamReturn::dumpInfo(const DataFlowEntry& de) const
 	LOG << "\t>|config f : " << (configFnc != nullptr) << std::endl;
 	LOG << "\t>|debug f  : " << (dbgFnc != nullptr) << std::endl;
 	LOG << "\t>|wrapp c  : " << llvmObjToString(wrappedCall) << std::endl;
+	LOG << "\t>|calls cnt: " << de.numberOfCalls() << std::endl;
+	LOG << "\t>|sto stack: " << de.storesOnRawStack(*_abi) << std::endl;
+	LOG << "\t>|is decode: " << de.isFullyDecoded() << std::endl;
 	LOG << "\t>|type set : " << !de.argTypes().empty() << std::endl;
 	LOG << "\t>|ret type : " << llvmObjToString(de.getRetType()) << std::endl;
 	LOG << "\t>|ret value: " << llvmObjToString(de.getRetValue()) << std::endl;
@@ -912,6 +923,57 @@ void ParamReturn::modifyType(DataFlowEntry& de) const
 	de.setArgs(std::move(args));
 }
 
+void ParamReturn::propagateWrapped() {
+	for (auto& p : _fnc2calls)
+	{
+		propagateWrapped(p.second);
+	}
+}
+
+void ParamReturn::propagateWrapped(DataFlowEntry& de) {
+	auto* fnc = de.getFunction();
+	auto* wrappedCall = de.getWrappedCall();
+	if (fnc == nullptr || wrappedCall == nullptr)
+	{
+		return;
+	}
+
+	llvm::CallInst* wrappedCall2 = nullptr;
+	for (inst_iterator I = inst_begin(fnc), E = inst_end(fnc); I != E; ++I)
+	{
+		if (auto* c = dyn_cast<CallInst>(&*I))
+		{
+			auto* cf = c->getCalledFunction();
+			if (cf && !cf->isIntrinsic()) // && cf->isDeclaration())
+			{
+				wrappedCall2 = c;
+				break;
+			}
+		}
+	}
+
+	if (wrappedCall != wrappedCall2) {
+		// Something strange. Reset wrapped call and give up.
+		de.setWrappedCall(nullptr);
+		return;
+	}
+	auto* callee = wrappedCall->getCalledFunction();
+	auto fIt = _fnc2calls.find(callee);
+	assert (fIt != _fnc2calls.end());
+	DataFlowEntry& wrapDe = fIt->second;
+	// dumpInfo(de);
+	// dumpInfo(wrapDe);
+
+	if (!wrapDe.argTypes().empty()) {
+		// Types have already been supplied.
+		return;
+	}
+
+	wrapDe.setArgTypes(std::vector(de.argTypes()), std::vector(de.argNames()));
+	wrapDe.setRetType(de.getRetType());
+	// dumpInfo(wrapDe);
+}
+
 void ParamReturn::applyToIr()
 {
 	for (auto& p : _fnc2calls)
@@ -1050,8 +1112,32 @@ void ParamReturn::connectWrappers(const DataFlowEntry& de)
 	unsigned i = 0;
 	for (auto& a : fnc->args())
 	{
-		auto* conv = IrModifier::convertValueToType(&a, wrappedCall->getArgOperand(i)->getType(), wrappedCall);
-		wrappedCall->setArgOperand(i++, conv);
+		auto iarg = wrappedCall->getArgOperand(i);
+		bool shouldSkip = false;
+		if (auto* load = dyn_cast<LoadInst>(llvm_utils::skipCasts(iarg))) {
+			auto oldarg = load->getPointerOperand();
+
+			std::vector<StoreInst*> users;
+			for (const auto& U : oldarg->users())
+			{
+				if (auto* store = dyn_cast<StoreInst>(U)) {
+					if (store->getFunction() == fnc)
+						users.push_back(store);
+				}
+			}
+			for (auto store: users) {
+				if (llvm_utils::skipCasts(store->getValueOperand()) == &a)
+					continue;
+
+				shouldSkip = true;
+			}
+		}
+
+		if (!shouldSkip) {
+			auto* conv = IrModifier::convertValueToType(&a, wrappedCall->getArgOperand(i)->getType(), wrappedCall);
+			wrappedCall->setArgOperand(i, conv);
+		}
+		i++;
 	}
 
 	//

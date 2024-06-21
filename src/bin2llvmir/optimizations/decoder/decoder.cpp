@@ -9,6 +9,7 @@
 
 #include "retdec/utils/conversion.h"
 #include "retdec/utils/string.h"
+#include "retdec/utils/io/log.h"
 #include "retdec/bin2llvmir/optimizations/decoder/decoder.h"
 #include "retdec/bin2llvmir/utils/llvm.h"
 #include "retdec/bin2llvmir/utils/capstone.h"
@@ -17,6 +18,7 @@ using namespace retdec::capstone2llvmir;
 using namespace retdec::common;
 using namespace retdec::bin2llvmir::st_match;
 using namespace retdec::fileformat;
+using namespace retdec::utils::io;
 
 namespace retdec {
 namespace bin2llvmir {
@@ -24,7 +26,7 @@ namespace bin2llvmir {
 char Decoder::ID = 0;
 
 static llvm::RegisterPass<Decoder> X(
-		"decoder",
+		"retdec-decoder",
 		"Input binary to LLVM IR decoding",
 		false, // Only looks at CFG
 		false // Analysis Pass
@@ -88,7 +90,7 @@ bool Decoder::runCatcher()
 	}
 	catch (const BaseError& e)
 	{
-		std::cerr << "[capstone2llvmir]: " << e.what() << std::endl;
+		Log::error() << "[capstone2llvmir]: " << e.what() << std::endl;
 		exit(1);
 	}
 }
@@ -112,7 +114,7 @@ bool Decoder::run()
 
 	decode();
 
-	if (debug_enabled)
+	if (debug_enabled && fs::exists(_config->getOutputDirectory()))
 	{
 		dumpModuleToFile(_module, _config->getOutputDirectory());
 	}
@@ -121,7 +123,7 @@ bool Decoder::run()
 	patternsRecognize();
 	finalizePseudoCalls();
 
-	if (debug_enabled)
+	if (debug_enabled && fs::exists(_config->getOutputDirectory()))
 	{
 		dumpControFlowToJson(_module, _config->getOutputDirectory());
 		dumpModuleToFile(_module, _config->getOutputDirectory());
@@ -129,7 +131,7 @@ bool Decoder::run()
 
 	initConfigFunctions();
 
-	if (debug_enabled)
+	if (debug_enabled && fs::exists(_config->getOutputDirectory()))
 	{
 		dumpModuleToFile(_module, _config->getOutputDirectory());
 	}
@@ -182,6 +184,12 @@ void Decoder::decodeJumpTarget(const JumpTarget& jt)
 	if (start.isUndefined())
 	{
 		LOG << "\t\t" << "unknown target address -> skip" << std::endl;
+		return;
+	}
+	
+	if (jt.getFromAddress().isUndefined() && jt.getType() == JumpTarget::eType::IMPORT)
+	{
+		LOG << "\t\t" << "target address in data section -> skip" << std::endl;
 		return;
 	}
 
@@ -293,6 +301,7 @@ void Decoder::decodeJumpTarget(const JumpTarget& jt)
 		LOG << "\t\t\t" << "translating = " << addr << std::endl;
 
 		Address oldAddr = addr;
+
 		auto res = translate(bytes, addr, irb);
 
 		if (res.failed() || res.llvmInsn == nullptr)
@@ -845,6 +854,46 @@ common::Address Decoder::getJumpTarget(
 					n->value = llvm::ConstantInt::get(
 							_abi->getDefaultType(),
 							gotpltAddr);
+				}
+			}
+		}
+	}
+
+	if (plt &&
+			((plt->getName() == ".plt.sec") || (plt->getName() == ".plt.got")) &&
+		   _config->getConfig().architecture.isX86_32())
+	{
+		// This case is for x86 32 bit compiled with GCC. Its PLT entries are in
+		// sections .plt.sec or .plt.got. An entry is of the form:
+		//
+		// jmp *offset(%ebx)
+		//
+		// When this code is encountered register %ebx has been loaded with the
+		// address of the start of the Global Offset Table (.got) section.
+		//
+		// The above jump produces llvm code  that matches the following pattern
+		// where the global variable is a reference to the ebx register.
+
+		llvm::LoadInst* li1 = nullptr;
+		llvm::LoadInst* li2 = nullptr;
+		llvm::ConstantInt* ci = nullptr;
+		llvm::GlobalVariable* gv = nullptr;
+		auto pattern =
+			m_Load(
+				m_Add(
+					m_Load(m_GlobalVariable(gv), &li2),
+					m_ConstantInt(ci)),
+				&li1);
+
+		if (match(st, pattern) && (gv->getName().str() == "ebx")) {
+			auto* gotSec = _image->getFileFormat()->getSection(".got");
+			if (gotSec)
+			{
+				auto gotsecAddr = gotSec->getAddress();
+				Address t = gotsecAddr + ci->getZExtValue();
+				if (_imports.count(t))
+				{
+					return t;
 				}
 			}
 		}

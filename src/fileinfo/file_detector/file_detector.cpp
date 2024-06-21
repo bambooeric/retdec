@@ -211,7 +211,11 @@ void FileDetector::getCertificates()
 {
 	if (fileParser->isSignaturePresent())
 		fileInfo.setSignatureVerified(fileParser->isSignatureVerified());
-	fileInfo.setCertificateTable(fileParser->getCertificateTable());
+
+	// const CertificateTable* certificateTable = fileParser->getCertificateTable());
+	if (fileParser->getCertificateTable()) {
+		fileInfo.setCertificateTable(fileParser->getCertificateTable());
+	}
 }
 
 /**
@@ -317,8 +321,8 @@ void FileDetector::setConfigFile(retdec::config::Config &config)
 			arch,
 			endian,
 			config.architecture.getByteSize(),
-			config.getEntryPoint(),
-			config.getSectionVMA());
+			config.parameters.getEntryPoint(),
+			config.parameters.getSectionVMA());
 }
 
 /**

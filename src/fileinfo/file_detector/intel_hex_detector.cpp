@@ -122,7 +122,7 @@ void IntelHexDetector::detectFileType()
 
 void IntelHexDetector::getAdditionalInfo()
 {
-	unsigned long long ep = 0;
+	std::uint64_t ep = 0;
 	if(fileParser->getEpAddress(ep))
 	{
 		fileInfo.toolInfo.epAddress = ep;
@@ -138,7 +138,7 @@ void IntelHexDetector::getAdditionalInfo()
  */
 retdec::cpdetect::CompilerDetector* IntelHexDetector::createCompilerDetector() const
 {
-	return new IntelHexCompiler(*ihexParser, cpParams, fileInfo.toolInfo);
+	return new CompilerDetector(*ihexParser, cpParams, fileInfo.toolInfo);
 }
 
 } // namespace fileinfo

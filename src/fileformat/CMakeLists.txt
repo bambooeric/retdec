@@ -1,8 +1,15 @@
 
+if(WIN32)
+	set(OPENSSL_USE_STATIC_LIBS TRUE)
+	set(OPENSSL_MSVC_STATIC_RT ${RETDEC_MSVC_STATIC_RUNTIME})
+endif()
+find_package(OpenSSL 1.0.1 REQUIRED)
+
 add_library(fileformat STATIC
 	utils/format_detection.cpp
 	utils/byte_array_buffer.cpp
 	utils/conversions.cpp
+	utils/crypto.cpp
 	utils/other.cpp
 	utils/asn1.cpp
 	utils/file_io.cpp
@@ -27,6 +34,7 @@ add_library(fileformat STATIC
 	types/visual_basic/visual_basic_extern.cpp
 	types/import_table/import.cpp
 	types/import_table/import_table.cpp
+	types/import_table/elf_import_table.cpp
 	types/import_table/pe_import.cpp
 	types/export_table/export.cpp
 	types/export_table/export_table.cpp
@@ -61,9 +69,6 @@ add_library(fileformat STATIC
 	types/note_section/elf_notes.cpp
 	types/note_section/elf_core.cpp
 	types/tls_info/tls_info.cpp
-	file_format/pe/pe_format_parser/pe_format_parser64.cpp
-	file_format/pe/pe_format_parser/pe_format_parser.cpp
-	file_format/pe/pe_format_parser/pe_format_parser32.cpp
 	file_format/pe/pe_format.cpp
 	file_format/pe/pe_dll_list.cpp
 	file_format/coff/coff_format.cpp
@@ -87,13 +92,26 @@ target_include_directories(fileformat
 
 target_link_libraries(fileformat
 	PUBLIC
-		retdec::crypto
 		retdec::common
 		retdec::utils
 		retdec::pelib
 		retdec::deps::elfio
 		retdec::deps::llvm
+	PRIVATE
+		retdec::deps::tlsh
+		retdec::deps::stb
+		retdec::deps::authenticode
+		OpenSSL::Crypto
 )
+
+# Needed when OpenSSL is linked statically on Windows.
+if(WIN32)
+	target_link_libraries(fileformat
+		PRIVATE
+			Crypt32
+			ws2_32
+	)
+endif()
 
 set_target_properties(fileformat
 	PROPERTIES

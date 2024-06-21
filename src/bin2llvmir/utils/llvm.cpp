@@ -13,6 +13,7 @@
 #include "retdec/bin2llvmir/providers/abi/abi.h"
 #include "retdec/bin2llvmir/utils/llvm.h"
 #include "retdec/utils/conversion.h"
+#include "retdec/utils/string.h"
 
 using namespace llvm;
 
@@ -233,11 +234,12 @@ Type* stringToLlvmType(LLVMContext& ctx, const std::string& str)
 					Abi::DEFAULT_ADDR_SPACE);
 		}
 
-		return t == nullptr ?
-				t :
-				PointerType::isValidElementType(t) ?
-						PointerType::get(t, Abi::DEFAULT_ADDR_SPACE) :
-						nullptr;
+		if (t == nullptr || !PointerType::isValidElementType(t))
+		{
+			t = Type::getInt32Ty(ctx);
+		}
+
+		return PointerType::get(t, Abi::DEFAULT_ADDR_SPACE);
 	}
 	// Array type: [<#elems> x <elem type>]
 	//
@@ -398,7 +400,8 @@ Type* stringToLlvmType(LLVMContext& ctx, const std::string& str)
 	//
 	else if (std::regex_match(s, match, regexStructId))
 	{
-		return ctx.pImpl->NamedStructTypes.lookup(std::string(match[1]));
+		auto* r = ctx.pImpl->NamedStructTypes.lookup(std::string(match[1]));
+		return r;
 	}
 
 	return nullptr;

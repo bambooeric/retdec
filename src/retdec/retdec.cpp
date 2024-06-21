@@ -4,16 +4,14 @@
  * @copyright (c) 2019 Avast Software, licensed under the MIT license
  */
 
-#include <iostream>
-
 #include <llvm/ADT/Triple.h>
 #include <llvm/Analysis/CallGraph.h>
 #include <llvm/Analysis/CallGraphSCCPass.h>
 #include <llvm/Analysis/LoopPass.h>
 #include <llvm/Analysis/RegionPass.h>
+#include <llvm/Analysis/ScalarEvolution.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
-#include <llvm/Bitcode/BitcodeWriterPass.h>
 #include <llvm/CodeGen/CommandFlags.inc>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/DataLayout.h>
@@ -29,10 +27,8 @@
 #include <llvm/LinkAllIR.h>
 #include <llvm/MC/SubtargetFeature.h>
 #include <llvm/Support/Debug.h>
-#include <llvm/Support/FileSystem.h>
 #include <llvm/Support/Host.h>
 #include <llvm/Support/ManagedStatic.h>
-#include <llvm/Support/PluginLoader.h>
 #include <llvm/Support/PrettyStackTrace.h>
 #include <llvm/Support/Signals.h>
 #include <llvm/Support/SourceMgr.h>
@@ -49,8 +45,20 @@
 #include "retdec/bin2llvmir/providers/asm_instruction.h"
 #include "retdec/bin2llvmir/providers/config.h"
 
+#include "retdec/llvmir2hll/llvmir2hll.h"
+
 #include "retdec/config/config.h"
 #include "retdec/retdec/retdec.h"
+#include "retdec/utils/memory.h"
+#include "retdec/utils/io/log.h"
+
+using namespace retdec::utils::io;
+
+// extern llvm::cl::opt<bool> PrintAfterAll;
+
+//==============================================================================
+// disassembler
+//==============================================================================
 
 /**
  * Create an empty input module.
@@ -298,7 +306,7 @@ LlvmModuleContextPair disassemble(
 	auto module = createLlvmModule(*context);
 
 	config::Config c;
-	c.setInputFile(inputPath);
+	c.parameters.setInputFile(inputPath);
 
 	// Create a PassManager to hold and optimize the collection of passes we
 	// are about to build.
@@ -313,6 +321,201 @@ LlvmModuleContextPair disassemble(
 	fillFunctions(*module, fs);
 
 	return LlvmModuleContextPair{std::move(module), std::move(context)};
+}
+
+//==============================================================================
+// decompiler
+//==============================================================================
+
+/**
+ * Call a bunch of LLVM initialization functions, same as the original opt.
+ */
+llvm::PassRegistry& initializeLlvmPasses()
+{
+	// Initialize passes
+	llvm::PassRegistry& Registry = *llvm::PassRegistry::getPassRegistry();
+	initializeCore(Registry);
+	initializeScalarOpts(Registry);
+	initializeIPO(Registry);
+	initializeAnalysis(Registry);
+	initializeTransformUtils(Registry);
+	initializeInstCombine(Registry);
+	initializeTarget(Registry);
+	return Registry;
+}
+
+/**
+ * This pass just prints phase information about other, subsequent passes.
+ * In pass manager, tt should be placed right before the pass which phase info
+ * it is printing.
+ */
+class ModulePassPrinter : public ModulePass
+{
+	public:
+		static char ID;
+		std::string PhaseName;
+		std::string PhaseArg;
+		std::string PassName;
+
+		static std::string LastPhase;
+		inline static const std::string LlvmAggregatePhaseName = "LLVM";
+
+	public:
+		ModulePassPrinter(
+				const std::string& phaseName,
+				const std::string& phaseArg)
+				: ModulePass(ID)
+				, PhaseName(phaseName)
+				, PhaseArg(phaseArg)
+				, PassName("ModulePass Printer: " + PhaseName)
+		{
+
+		}
+
+		bool runOnModule(Module &M) override
+		{
+			if (utils::startsWith(PhaseArg, "retdec"))
+			{
+				Log::phase(PhaseName);
+				LastPhase = PhaseArg;
+			}
+			else
+			{
+				// aggregate LLVM
+				if (LastPhase != LlvmAggregatePhaseName)
+				{
+					Log::phase(LlvmAggregatePhaseName);
+					LastPhase = LlvmAggregatePhaseName;
+				}
+
+				// print all
+				// Log::phase(PhaseName);
+				// LastPhase = PhaseArg;
+			}
+			return false;
+		}
+
+		llvm::StringRef getPassName() const override
+		{
+			return PassName.c_str();
+		}
+
+		void getAnalysisUsage(AnalysisUsage &AU) const override
+		{
+			AU.setPreservesAll();
+		}
+};
+char ModulePassPrinter::ID = 0;
+std::string ModulePassPrinter::LastPhase;
+
+/**
+ * Add the pass to the pass manager - no verification.
+ */
+static inline void addPass(
+		legacy::PassManagerBase& PM,
+		Pass* P,
+		const PassInfo* PI)
+{
+	PM.add(new ModulePassPrinter(
+			PI->getPassName().str(),
+			PI->getPassArgument().str()
+	));
+	PM.add(P);
+
+// if (!PI->isAnalysis())
+// PM.add(P->createPrinterPass(
+// 		dbgs(),
+// 		("*** IR Dump After " + P->getPassName() + " ***").str()
+// ));
+
+}
+
+
+/**
+ * TODO: this function has exact copy located in retdec-decompiler.cpp.
+ * The reason for this is that right now creation of correct interface that
+ * would hold this function is much more time expensive than hard copy.
+ *
+ * Before merging these two methods (providing them suitable interface)
+ * each change in one of them must be reflected to both.
+ */
+void setLogsFrom(const retdec::config::Parameters& params)
+{
+	auto logFile = params.getLogFile();
+	auto errFile = params.getErrFile();
+	auto verbose = params.isVerboseOutput();
+
+	Logger::Ptr outLog = nullptr;
+
+	outLog.reset(
+		logFile.empty()
+			? new Logger(std::cout, verbose)
+			: new FileLogger(logFile, verbose)
+	);
+
+	Log::set(Log::Type::Info, std::move(outLog));
+
+	if (!errFile.empty()) {
+		Log::set(Log::Type::Error, Logger::Ptr(new FileLogger(errFile)));
+	}
+}
+
+bool decompile(retdec::config::Config& config, std::string* outString)
+{
+	setLogsFrom(config.parameters);
+
+	Log::phase("Initialization");
+	auto& passRegistry = initializeLlvmPasses();
+
+	// limitMaximalMemoryIfRequested(params);
+	// PrintAfterAll = true;
+
+	auto context = std::make_unique<llvm::LLVMContext>();
+	auto module = createLlvmModule(*context);
+
+	// Create a PassManager to hold and optimize the collection of passes we
+	// are about to build.
+	llvm::legacy::PassManager pm;
+
+	// Without this LLVM does more opts than we would like it to.
+	// e.g. printf() call -> puts() call
+	//
+	// Add an appropriate TargetLibraryInfo pass for the module's triple.
+	Triple ModuleTriple(module->getTargetTriple());
+	TargetLibraryInfoImpl TLII(ModuleTriple);
+	// The -disable-simplify-libcalls flag actually disables all builtin optzns.
+	TLII.disableAllFunctions();
+	pm.add(new TargetLibraryInfoWrapperPass(TLII));
+
+	for (auto& p : config.parameters.llvmPasses)
+	{
+		if (auto* info = passRegistry.getPassInfo(p))
+		{
+			auto* pass = info->createPass();
+			addPass(pm, pass, info);
+
+			if (info->getTypeInfo() == &bin2llvmir::ProviderInitialization::ID)
+			{
+				auto* p = static_cast<bin2llvmir::ProviderInitialization*>(pass);
+				p->setConfig(&config);
+			}
+			if (info->getTypeInfo() == &llvmir2hll::LlvmIr2Hll::ID)
+			{
+				auto* p = static_cast<llvmir2hll::LlvmIr2Hll*>(pass);
+				p->setConfig(&config);
+				p->setOutputString(outString);
+			}
+		}
+		else
+		{
+			throw std::runtime_error("cannot create pass: " + p);
+		}
+	}
+
+	// Now that we have all of the passes ready, run them.
+	pm.run(*module);
+
+	return EXIT_SUCCESS;
 }
 
 } // namespace retdec

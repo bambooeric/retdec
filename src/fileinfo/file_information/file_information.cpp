@@ -5,6 +5,7 @@
  */
 
 #include <algorithm>
+#include <memory>
 
 #include "retdec/common/address.h"
 #include "fileinfo/file_information/file_information.h"
@@ -103,6 +104,20 @@ ReturnCode FileInformation::getStatus() const
 std::string FileInformation::getPathToFile() const
 {
 	return filePath;
+}
+
+/**
+ * Get time when the analysis was done
+ * @return Analysis time
+ */
+std::string FileInformation::getAnalysisTime() const
+{
+	return analysisTime;
+}
+
+std::string FileInformation::getTelfhash() const
+{
+	return telfhash;
 }
 
 /**
@@ -785,6 +800,19 @@ bool FileInformation::hasRichHeaderRecords() const
 	return richHeader.hasRecords();
 }
 
+std::string FileInformation::getRichHeaderSha256() const
+{
+	return richHeader.getSha256();
+}
+std::string FileInformation::getRichHeaderCrc32() const
+{
+	return richHeader.getCrc32();
+}
+std::string FileInformation::getRichHeaderMd5() const
+{
+	return richHeader.getMd5();
+}
+
 /**
  * Check whether visual basic informations are used.
  * @return @c true if it is used, otherwise @c false/
@@ -1204,6 +1232,14 @@ std::string FileInformation::getImphashSha256() const
 {
 	return importTable.getImphashSha256();
 }
+/**
+ * Get imphash as Tlsh
+ * @return Imphash as Tlsh
+ */
+std::string FileInformation::getImphashTlsh() const
+{
+	return importTable.getImphashTlsh();
+}
 
 /**
  * Get import
@@ -1306,11 +1342,15 @@ std::string FileInformation::getDepsListFailedToLoad() const
 
 /**
  * Sets the name of the dependency file that failed to load
- * @return Nothing
  */
 void FileInformation::setDepsListFailedToLoad(const std::string & depsList)
 {
 	failedDepsList = depsList;
+}
+
+std::string FileInformation::getExportDllName() const
+{
+	return exportTable.getDllName();
 }
 
 /**
@@ -1628,460 +1668,6 @@ bool FileInformation::hasResourceTableRecords() const
 	return resourceTable.hasRecords();
 }
 
-/**
- * Get number of stored certificates
- * @return Number of stored certificates
- */
-std::size_t FileInformation::getNumberOfStoredCertificates() const
-{
-	return certificateTable.getNumberOfCertificates();
-}
-
-/**
- * Get index of the certificate of the counter-signer. Returned value should not be used without prior checking
- * of whether the table has counter-signer certificate.
- * @return Index of the counter-signer's certificate
- */
-std::size_t FileInformation::getCertificateTableSignerCertificateIndex() const
-{
-	return certificateTable.getSignerCertificateIndex();
-}
-
-/**
- * Get date since when is certificate valid
- * @return Date since when is certificate valid
- */
-std::size_t FileInformation::getCertificateTableCounterSignerCertificateIndex() const
-{
-	return certificateTable.getCounterSignerCertificateIndex();
-}
-
-/**
- * Get date since when is certificate valid
- * @param index Index of selected certificate from table (indexed from 0)
- * @return Date since when is certificate valid
- */
-std::string FileInformation::getCertificateValidSince(std::size_t index) const
-{
-	return certificateTable.getCertificateValidSince(index);
-}
-
-/**
- * Get date until when is certificate valid
- * @param index Index of selected certificate from table (indexed from 0)
- * @return Date until when is certificate valid
- */
-std::string FileInformation::getCertificateValidUntil(std::size_t index) const
-{
-	return certificateTable.getCertificateValidUntil(index);
-}
-
-/**
- * Get certificate public key
- * @param index Index of selected certificate from table (indexed from 0)
- * @return Public key
- */
-std::string FileInformation::getCertificatePublicKey(std::size_t index) const
-{
-	return certificateTable.getCertificatePublicKey(index);
-}
-
-/**
- * Get certificate public key algorithm
- * @param index Index of selected certificate from table (indexed from 0)
- * @return Public key algorithm
- */
-std::string FileInformation::getCertificatePublicKeyAlgorithm(std::size_t index) const
-{
-	return certificateTable.getCertificatePublicKeyAlgorithm(index);
-}
-
-/**
- * Get certificate signature algorithm
- * @param index Index of selected certificate from table (indexed from 0)
- * @return Signature algorithm
- */
-std::string FileInformation::getCertificateSignatureAlgorithm(std::size_t index) const
-{
-	return certificateTable.getCertificateSignatureAlgorithm(index);
-}
-
-/**
- * Get certificate serial number
- * @param index Index of selected certificate from table (indexed from 0)
- * @return Serial number
- */
-std::string FileInformation::getCertificateSerialNumber(std::size_t index) const
-{
-	return certificateTable.getCertificateSerialNumber(index);
-}
-
-/**
- * Get certificate SHA1 digest
- * @param index Index of selected certificate from table (indexed from 0)
- * @return SHA1 digest
- */
-std::string FileInformation::getCertificateSha1Digest(std::size_t index) const
-{
-	return certificateTable.getCertificateSha1Digest(index);
-}
-
-/**
- * Get certificate SHA256 digest
- * @param index Index of selected certificate from table (indexed from 0)
- * @return SHA256 digest
- */
-std::string FileInformation::getCertificateSha256Digest(std::size_t index) const
-{
-	return certificateTable.getCertificateSha256Digest(index);
-}
-
-/**
- * Get certificate issuer
- * @param index Index of selected certificate (indexed from 0)
- * @return Issuer of selected certificate
- */
-std::string FileInformation::getCertificateIssuerRawStr(std::size_t index) const
-{
-	return certificateTable.getCertificateIssuerRaw(index);
-}
-
-/**
- * Get certificate subject
- * @param index Index of selected certificate (indexed from 0)
- * @return Subject of selected certificate
- */
-std::string FileInformation::getCertificateSubjectRawStr(std::size_t index) const
-{
-	return certificateTable.getCertificateSubjectRaw(index);
-}
-
-/**
- * Get certificate issuer country
- * @param index Index of selected certificate (indexed from 0)
- * @return Country of selected certificate issuer
- */
-std::string FileInformation::getCertificateIssuerCountry(std::size_t index) const
-{
-	return certificateTable.getCertificateIssuerCountry(index);
-}
-
-/**
- * Get certificate issuer organization
- * @param index Index of selected certificate (indexed from 0)
- * @return Organization of selected certificate issuer
- */
-std::string FileInformation::getCertificateIssuerOrganization(std::size_t index) const
-{
-	return certificateTable.getCertificateIssuerOrganization(index);
-}
-
-/**
- * Get certificate issuer organizational unit
- * @param index Index of selected certificate (indexed from 0)
- * @return Organizational unit of selected certificate issuer
- */
-std::string FileInformation::getCertificateIssuerOrganizationalUnit(std::size_t index) const
-{
-	return certificateTable.getCertificateIssuerOrganizationalUnit(index);
-}
-
-/**
- * Get certificate issuer name qualifier
- * @param index Index of selected certificate (indexed from 0)
- * @return Name qualifier of selected certificate issuer
- */
-std::string FileInformation::getCertificateIssuerNameQualifier(std::size_t index) const
-{
-	return certificateTable.getCertificateIssuerNameQualifier(index);
-}
-
-/**
- * Get certificate issuer state
- * @param index Index of selected certificate (indexed from 0)
- * @return State of selected certificate issuer
- */
-std::string FileInformation::getCertificateIssuerState(std::size_t index) const
-{
-	return certificateTable.getCertificateIssuerState(index);
-}
-
-/**
- * Get certificate issuer common name
- * @param index Index of selected certificate (indexed from 0)
- * @return Common name of selected certificate issuer
- */
-std::string FileInformation::getCertificateIssuerCommonName(std::size_t index) const
-{
-	return certificateTable.getCertificateIssuerCommonName(index);
-}
-
-/**
- * Get certificate issuer serial number
- * @param index Index of selected certificate (indexed from 0)
- * @return Serial number of selected certificate issuer
- */
-std::string FileInformation::getCertificateIssuerSerialNumber(std::size_t index) const
-{
-	return certificateTable.getCertificateIssuerSerialNumber(index);
-}
-
-/**
- * Get certificate issuer locality
- * @param index Index of selected certificate (indexed from 0)
- * @return Locality of selected certificate issuer
- */
-std::string FileInformation::getCertificateIssuerLocality(std::size_t index) const
-{
-	return certificateTable.getCertificateIssuerLocality(index);
-}
-
-/**
- * Get certificate issuer title
- * @param index Index of selected certificate (indexed from 0)
- * @return Title of selected certificate issuer
- */
-std::string FileInformation::getCertificateIssuerTitle(std::size_t index) const
-{
-	return certificateTable.getCertificateIssuerTitle(index);
-}
-
-/**
- * Get certificate issuer surname
- * @param index Index of selected certificate (indexed from 0)
- * @return Surname of selected certificate issuer
- */
-std::string FileInformation::getCertificateIssuerSurname(std::size_t index) const
-{
-	return certificateTable.getCertificateIssuerSurname(index);
-}
-
-/**
- * Get certificate issuer given name
- * @param index Index of selected certificate (indexed from 0)
- * @return Given name of selected certificate issuer
- */
-std::string FileInformation::getCertificateIssuerGivenName(std::size_t index) const
-{
-	return certificateTable.getCertificateIssuerGivenName(index);
-}
-
-/**
- * Get certificate issuer initials
- * @param index Index of selected certificate (indexed from 0)
- * @return Initials of selected certificate issuer
- */
-std::string FileInformation::getCertificateIssuerInitials(std::size_t index) const
-{
-	return certificateTable.getCertificateIssuerInitials(index);
-}
-
-/**
- * Get certificate issuer pseudonym
- * @param index Index of selected certificate (indexed from 0)
- * @return Pseudonym of selected certificate issuer
- */
-std::string FileInformation::getCertificateIssuerPseudonym(std::size_t index) const
-{
-	return certificateTable.getCertificateIssuerPseudonym(index);
-}
-
-/**
- * Get certificate issuer generation qualifier
- * @param index Index of selected certificate (indexed from 0)
- * @return Generation qualifier of selected certificate issuer
- */
-std::string FileInformation::getCertificateIssuerGenerationQualifier(std::size_t index) const
-{
-	return certificateTable.getCertificateIssuerGenerationQualifier(index);
-}
-
-/**
- * Get certificate issuer email address
- * @param index Index of selected certificate (indexed from 0)
- * @return Email address of selected certificate issuer
- */
-std::string FileInformation::getCertificateIssuerEmailAddress(std::size_t index) const
-{
-	return certificateTable.getCertificateIssuerEmailAddress(index);
-}
-
-/**
- * Get certificate subject country
- * @param index Index of selected certificate (indexed from 0)
- * @return Country of selected certificate subject
- */
-std::string FileInformation::getCertificateSubjectCountry(std::size_t index) const
-{
-	return certificateTable.getCertificateSubjectCountry(index);
-}
-
-/**
- * Get certificate subject organization
- * @param index Index of selected certificate (indexed from 0)
- * @return Organization of selected certificate subject
- */
-std::string FileInformation::getCertificateSubjectOrganization(std::size_t index) const
-{
-	return certificateTable.getCertificateSubjectOrganization(index);
-}
-
-/**
- * Get certificate subject organizational unit
- * @param index Index of selected certificate (indexed from 0)
- * @return Organizational unit of selected certificate subject
- */
-std::string FileInformation::getCertificateSubjectOrganizationalUnit(std::size_t index) const
-{
-	return certificateTable.getCertificateSubjectOrganizationalUnit(index);
-}
-
-/**
- * Get certificate subject name qualifier
- * @param index Index of selected certificate (indexed from 0)
- * @return Name qualifier of selected certificate subject
- */
-std::string FileInformation::getCertificateSubjectNameQualifier(std::size_t index) const
-{
-	return certificateTable.getCertificateSubjectNameQualifier(index);
-}
-
-/**
- * Get certificate subject state
- * @param index Index of selected certificate (indexed from 0)
- * @return State of selected certificate subject
- */
-std::string FileInformation::getCertificateSubjectState(std::size_t index) const
-{
-	return certificateTable.getCertificateSubjectState(index);
-}
-
-/**
- * Get certificate subject common name
- * @param index Index of selected certificate (indexed from 0)
- * @return Common name of selected certificate subject
- */
-std::string FileInformation::getCertificateSubjectCommonName(std::size_t index) const
-{
-	return certificateTable.getCertificateSubjectCommonName(index);
-}
-
-/**
- * Get certificate subject serial number
- * @param index Index of selected certificate (indexed from 0)
- * @return Serial number of selected certificate subject
- */
-std::string FileInformation::getCertificateSubjectSerialNumber(std::size_t index) const
-{
-	return certificateTable.getCertificateSubjectSerialNumber(index);
-}
-
-/**
- * Get certificate subject locality
- * @param index Index of selected certificate (indexed from 0)
- * @return Locality of selected certificate subject
- */
-std::string FileInformation::getCertificateSubjectLocality(std::size_t index) const
-{
-	return certificateTable.getCertificateSubjectLocality(index);
-}
-
-/**
- * Get certificate subject title
- * @param index Index of selected certificate (indexed from 0)
- * @return Title of selected certificate subject
- */
-std::string FileInformation::getCertificateSubjectTitle(std::size_t index) const
-{
-	return certificateTable.getCertificateSubjectTitle(index);
-}
-
-/**
- * Get certificate subject surname
- * @param index Index of selected certificate (indexed from 0)
- * @return Surname of selected certificate subject
- */
-std::string FileInformation::getCertificateSubjectSurname(std::size_t index) const
-{
-	return certificateTable.getCertificateSubjectSurname(index);
-}
-
-/**
- * Get certificate subject given name
- * @param index Index of selected certificate (indexed from 0)
- * @return Given name of selected certificate subject
- */
-std::string FileInformation::getCertificateSubjectGivenName(std::size_t index) const
-{
-	return certificateTable.getCertificateSubjectGivenName(index);
-}
-
-/**
- * Get certificate subject initials
- * @param index Index of selected certificate (indexed from 0)
- * @return Initials of selected certificate subject
- */
-std::string FileInformation::getCertificateSubjectInitials(std::size_t index) const
-{
-	return certificateTable.getCertificateSubjectInitials(index);
-}
-
-/**
- * Get certificate subject pseudonym
- * @param index Index of selected certificate (indexed from 0)
- * @return Pseudonym of selected certificate subject
- */
-std::string FileInformation::getCertificateSubjectPseudonym(std::size_t index) const
-{
-	return certificateTable.getCertificateSubjectPseudonym(index);
-}
-
-/**
- * Get certificate subject generation qualifier
- * @param index Index of selected certificate (indexed from 0)
- * @return Generation qualifier of selected certificate subject
- */
-std::string FileInformation::getCertificateSubjectGenerationQualifier(std::size_t index) const
-{
-	return certificateTable.getCertificateSubjectGenerationQualifier(index);
-}
-
-/**
- * Get certificate subject email address
- * @param index Index of selected certificate (indexed from 0)
- * @return Email address of selected certificate subject
- */
-std::string FileInformation::getCertificateSubjectEmailAddress(std::size_t index) const
-{
-	return certificateTable.getCertificateSubjectEmailAddress(index);
-}
-
-/**
- * Find out if there are any records in certificate table
- * @return @c true if certificate table is not empty, @c false otherwise
- */
-bool FileInformation::hasCertificateTableRecords() const
-{
-	return certificateTable.hasRecords();
-}
-
-/**
- * Find out if there is signer certificate
- * @return @c true if there is signer certificate, @c false otherwise
- */
-bool FileInformation::hasCertificateTableSignerCertificate() const
-{
-	return certificateTable.hasSignerCertificate();
-}
-
-/**
- * Find out if there is counter-signer certificate
- * @return @c true if there is counter-signer certificate, @c false otherwise
- */
-bool FileInformation::hasCertificateTableCounterSignerCertificate() const
-{
-	return certificateTable.hasCounterSignerCertificate();
-}
 
 /**
  * Get start address of raw data of TLS
@@ -3730,6 +3316,20 @@ void FileInformation::setPathToFile(const std::string &filepath)
 }
 
 /**
+ * Set when the analysis was done
+ * @param analysistime Analysis time
+ */
+void FileInformation::setAnalysisTime(const std::string &analysistime)
+{
+	analysisTime = analysistime;
+}
+
+void FileInformation::setTelfhash(const std::string &hash)
+{
+	telfhash = hash;
+}
+
+/**
  * Get CRC32 of input file
  * @param fileCrc32 CRC32 of input file
  */
@@ -4264,9 +3864,9 @@ void FileInformation::setStrings(const std::vector<retdec::fileformat::String> *
  * Set certificate table
  * @param sTable Information about certificate table
  */
-void FileInformation::setCertificateTable(const retdec::fileformat::CertificateTable *sTable)
+void FileInformation::setCertificateTable(const retdec::fileformat::CertificateTable*  sTable)
 {
-	certificateTable.setTable(sTable);
+	certificateTable = sTable;
 }
 
 /**

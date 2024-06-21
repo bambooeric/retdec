@@ -50,7 +50,7 @@ std::string getSymbolLinkToSection(std::int16_t link)
 		return "DEBUG";
 	}
 
-	return numToStr(link - 1);
+	return std::to_string(link - 1);
 }
 
 /**
@@ -378,7 +378,7 @@ void CoffDetector::detectFileClass()
 
 void CoffDetector::detectArchitecture()
 {
-	unsigned long long machineType = 0;
+	std::uint64_t machineType = 0;
 	if(!coffParser->getMachineCode(machineType))
 	{
 		return;
@@ -525,7 +525,7 @@ void CoffDetector::getAdditionalInfo()
  */
 retdec::cpdetect::CompilerDetector* CoffDetector::createCompilerDetector() const
 {
-	return new CoffCompiler(*coffParser, cpParams, fileInfo.toolInfo);
+	return new CompilerDetector(*coffParser, cpParams, fileInfo.toolInfo);
 }
 
 } // namespace fileinfo

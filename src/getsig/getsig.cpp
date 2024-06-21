@@ -5,34 +5,37 @@
  */
 
 #include <cctype>
-#include <iostream>
 #include <vector>
 
 #include "retdec/fileformat/format_factory.h"
 #include "retdec/utils/conversion.h"
 #include "retdec/utils/string.h"
+#include "retdec/utils/io/log.h"
+#include "retdec/utils/version.h"
 
 using namespace retdec::fileformat;
 using namespace retdec::utils;
+using namespace retdec::utils::io;
 
 /**
  * Print usage.
  */
 void printUsage()
 {
-	std::cout <<
+	Log::info() <<
 	"getsig - generator of YARA tool signatures\n\n"
 	"Program takes executable files, compares their content at given\n"
 	"offset and prints signature representing contents of all files.\n\n"
 	"Usage: getsig [OPTIONS] FILE1 [FILE2 ...]\n\n"
 	"General:\n"
-	"  -h --help              Print this message.\n\n"
+	"  -h --help              Show this help.\n\n"
+	"  --version              Show RetDec version.\n\n"
 	"Rule options:\n"
 	"  -r --rule-name NAME\n"
 	"    Set name of rule. Default value is 'unknown'.\n\n"
 	"  -n --name NAME\n"
 	"    Set name of tool. Default value is 'unknown'.\n\n"
-	"  -v --version VERSION\n"
+	"  -v --tool-version VERSION\n"
 	"    Set version of tool. Attribute is omitted if not specified.\n\n"
 	"  -e --extra INFO\n"
 	"    Set extra information. Attribute is omitted if not specified.\n\n"
@@ -81,7 +84,7 @@ struct Options
 
 		// Search settings.
 		long long unsigned size = 100; ///< maximum size of pattern (bytes)
-		long long unsigned offset;     ///< value of search offset
+		std::uint64_t offset;     ///< value of search offset
 		bool isOffset = false;         ///< @c true if user provided offset
 };
 
@@ -93,7 +96,7 @@ struct Options
 int printError(
 		const std::string& message)
 {
-	std::cerr << "Error: " << message << ".\n";
+	Log::error() << Log::Error << message << ".\n";
 	return 1;
 }
 
@@ -104,7 +107,7 @@ int printError(
 void printWarning(
 		const std::string& message)
 {
-	std::cerr << "Warning: " << message << ".\n";
+	Log::error() << Log::Warning << message << ".\n";
 }
 
 /**
@@ -121,7 +124,7 @@ std::string getParamOrDie(std::vector<std::string> &argv, std::size_t &i)
 	}
 	else
 	{
-		std::cerr << "Error: missing argument value.\n\n";
+		Log::error() << Log::Error << "missing argument value.\n\n";
 		printUsage();
 		exit(1);
 	}
@@ -153,7 +156,7 @@ bool doParams(
 	{
 		"r",    "rule-name",
 		"n",    "name",
-		"v",    "version",
+		"v",    "tool-version",
 		"e",    "extra",
 		"l",    "language",
 		"s",    "size",
@@ -196,6 +199,11 @@ bool doParams(
 			printUsage();
 			exit(EXIT_SUCCESS);
 		}
+		else if (c == "--version")
+		{
+			Log::info() << version::getVersionStringLong() << "\n";
+			exit(EXIT_SUCCESS);
+		}
 		else if (c == "-b" || c == "--bytecode")
 		{
 			options.bytecode = true;
@@ -235,7 +243,7 @@ bool doParams(
 		{
 			options.name = getParamOrDie(argv, i);
 		}
-		else if (c == "-v" || c == "--version")
+		else if (c == "-v" || c == "--tool-version")
 		{
 			options.version = getParamOrDie(argv, i);
 		}
@@ -386,7 +394,7 @@ std::string getYaraRule(
 	std::string condition = "$1 at ";
 	if (options.isOffset)
 	{
-		condition += numToStr(options.offset);
+		condition += std::to_string(options.offset);
 	}
 	else
 	{
@@ -512,7 +520,7 @@ int main(int argc, char** argv) {
 
 	// create detection rule
 	const auto rule = getYaraRule(signature, format, options);
-	std::cout << rule;
+	Log::info() << rule;
 
 	if (!options.outputFile.empty())
 	{

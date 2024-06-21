@@ -44,7 +44,7 @@ MachODetector::MachODetector(
  */
 void MachODetector::getEntryPoint()
 {
-	unsigned long long res = 0;
+	std::uint64_t res = 0;
 	if(fileParser->getEpAddress(res))
 	{
 		fileInfo.toolInfo.epAddress = res;
@@ -185,8 +185,8 @@ void MachODetector::getEncryption()
 	{
 		std::stringstream message;
 		message << "Warning: This file is encrypted (encryption algorithm: " << id
-			<< ", offset: " << numToStr(offset, hexWithPrefix)
-			<< ", size: " << numToStr(size, hexWithPrefix) << ").";
+			<< ", offset: " << intToHexString(offset, true)
+			<< ", size: " << intToHexString(size, true) << ").";
 		fileInfo.messages.push_back(message.str());
 	}
 }
@@ -259,7 +259,7 @@ void MachODetector::detectFileClass()
 
 void MachODetector::detectArchitecture()
 {
-	unsigned long long machineType = 0;
+	std::uint64_t machineType = 0;
 	if(!machoParser->getMachineCode(machineType))
 	{
 		return;
@@ -333,7 +333,7 @@ void MachODetector::getAdditionalInfo()
  */
 retdec::cpdetect::CompilerDetector* MachODetector::createCompilerDetector() const
 {
-	return new MachOCompiler(*machoParser, cpParams, fileInfo.toolInfo);
+	return new CompilerDetector(*machoParser, cpParams, fileInfo.toolInfo);
 }
 
 /**

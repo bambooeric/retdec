@@ -7,6 +7,7 @@
 #include <set>
 
 #include "retdec/bin2llvmir/optimizations/param_return/data_entries.h"
+#include "retdec/bin2llvmir/providers/abi/abi.h"
 
 using namespace llvm;
 
@@ -401,6 +402,16 @@ bool DataFlowEntry::isValue() const
 	return _calledValue && !isFunction();
 }
 
+void DataFlowEntry::setIsFullyDecoded(bool res)
+{
+	_decoded = res;
+}
+
+bool DataFlowEntry::isFullyDecoded() const
+{
+	return _decoded;
+}
+
 bool DataFlowEntry::hasDefinition() const
 {
 	return isFunction() && !getFunction()->empty();
@@ -419,6 +430,64 @@ Value* DataFlowEntry::getValue() const
 void DataFlowEntry::setCalledValue(llvm::Value* called)
 {
 	_calledValue = called;
+}
+
+std::size_t DataFlowEntry::numberOfCalls() const
+{
+	auto fnc = getFunction();
+	if (fnc == nullptr)
+		return 0;
+
+	std::size_t calls = 0;
+	for (auto& bb: *fnc)
+		for (auto& i: bb)
+			if (auto call = dyn_cast<CallInst>(&i)) {
+				auto* calledFnc = call->getCalledFunction();
+				if (calledFnc && !calledFnc->isIntrinsic())
+					calls++;
+			}
+
+	return calls;
+}
+
+bool DataFlowEntry::hasBranches() const
+{
+	auto fnc = getFunction();
+	if (fnc == nullptr)
+		return false;
+
+	for (auto& bb: *fnc)
+		for (auto& i: bb)
+			if (isa<BranchInst>(i))
+				return true;
+
+	return false;
+}
+
+bool DataFlowEntry::storesOnRawStack(const Abi& abi) const
+{
+	auto fnc = getFunction();
+	if (fnc == nullptr)
+		return false;
+
+	for (auto& bb: *fnc) {
+		for (auto& i: bb) {
+			if (auto store = dyn_cast<StoreInst>(&i)) {
+				auto operand = store->getValueOperand();
+				auto storage = store->getPointerOperand();
+				if (abi.isStackPointerRegister(storage)) {
+					if (auto* pi = dyn_cast<PtrToIntInst>(operand)) {
+						if (abi.isStackVariable(pi->getPointerOperand()))
+							continue;
+					}
+
+					return true;
+				}
+			}
+		}
+	}
+
+	return false;
 }
 
 CallEntry* DataFlowEntry::createCallEntry(CallInst* call)

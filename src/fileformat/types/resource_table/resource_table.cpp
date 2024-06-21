@@ -5,13 +5,12 @@
  */
 
 #include <sstream>
-#include <iostream>
 
-#include "retdec/crypto/crypto.h"
 #include "retdec/utils/conversion.h"
 #include "retdec/utils/dynamic_buffer.h"
 #include "retdec/utils/string.h"
 #include "retdec/utils/alignment.h"
+#include "retdec/fileformat/utils/crypto.h"
 #include "retdec/fileformat/utils/other.h"
 #include "retdec/fileformat/types/resource_table/resource_table.h"
 #include "retdec/fileformat/types/resource_table/bitmap_image.h"
@@ -71,6 +70,27 @@ struct VersionInfoHeader
 namespace retdec {
 namespace fileformat {
 
+// Icon priority from YARA
+static const std::vector<IconPriorityEntry> iconPriority_YARA =
+{
+	{32, 32},
+	{24, 32},
+	{48, 32},
+	{32, 8},
+	{16, 32},
+	{64, 32},
+	{24, 8},
+	{48, 8},
+	{16, 8},
+	{64, 8},
+	{96, 32},
+	{96, 8},
+	{128, 32},
+	{128, 8},
+	{256, 32},
+	{256, 8}
+};
+
 /**
  * Compute icon perceptual hashes
  * @param icon Icon to compute the hash of
@@ -81,7 +101,7 @@ std::string ResourceTable::computePerceptualAvgHash(const ResourceIcon &icon) co
 	std::size_t trashHold = 128;
 	auto img = BitmapImage();
 
-	if (!img.parseDibFormat(icon))
+	if (!img.parseDibFormat(icon) && !img.parsePngFormat(icon))
 	{
 		return "";
 	}
@@ -110,7 +130,7 @@ std::string ResourceTable::computePerceptualAvgHash(const ResourceIcon &icon) co
 		}
 	}
 
-	return retdec::utils::toHex(bytes, false, 16);
+	return retdec::utils::intToHexString(bytes, false, 16);
 }
 
 /**
@@ -370,6 +390,93 @@ const ResourceIconGroup* ResourceTable::getPriorResourceIconGroup() const
 }
 
 /**
+ * Get the icon that will be used for calculation of the icon hash.
+ * This algorithm is supposed to be YARA-compatible
+ * @return Prior icon
+ */
+const ResourceIcon* ResourceTable::getIconForIconHash() const
+{
+	ResourceIconGroup * iconGroup = nullptr;
+	ResourceIcon * theBestIcon = nullptr;
+	std::size_t number_icon_ordinals = 0;
+	std::size_t best_icon_priority = 0xFF;
+
+	//
+	// Step 1: Get the suitable icon group. YARA takes the first icon group
+	// YARA: Done in module "pe.c", function "pe_collect_icon_ordinals()"
+	//
+
+	if(iconGroups.size())
+	{
+		iconGroup = iconGroups[0];
+		iconGroup->getNumberOfEntries(number_icon_ordinals);
+	}
+
+	//
+	// Step 2: Parse all icons in the PE and retrieve the
+	// YARA: Done in module "pe.c", function "pe_collect_icon_data()"
+	//
+
+	if(iconGroup && number_icon_ordinals)
+	{
+		for(ResourceIcon * icon : icons)
+		{
+			std::uint32_t icon_data_offset = icon->getOffset();
+			std::uint32_t icon_data_size = icon->getSizeInFile();
+
+			// Skip icons with zero offset or zero size
+			if(icon_data_offset == 0 || icon_data_size == 0 /* || icon_data_offset > pe->data_size */)
+				continue;
+
+			// Parse all icons in the group
+			for(std::size_t i = 0; i < number_icon_ordinals; i++)
+			{
+				std::size_t nameIdInGroup = 0;
+				std::size_t nameIdOfIcon = 0;
+				std::uint16_t iconWidth = 0;
+				std::uint16_t iconHeight = 0;
+				std::uint16_t iconBitCount = 0;
+
+				// Skip icons that are of different ID
+				iconGroup->getEntryNameID(i, nameIdInGroup);
+				icon->getNameId(nameIdOfIcon);
+				if(nameIdOfIcon != nameIdInGroup /* || fits_in_pe() */)
+					continue;
+
+				// Retrieve size and bit count
+				iconGroup->getEntryWidth(i, iconWidth);
+				iconGroup->getEntryHeight(i, iconHeight);
+				iconGroup->getEntryBitCount(i, iconBitCount);
+
+				// YARA ignores any icons that have width != height
+				if(iconWidth == iconHeight)
+				{
+					for(size_t j = 0; j < iconPriority_YARA.size() && j < best_icon_priority; j++)
+					{
+						if(iconWidth == iconPriority_YARA[j].iconWidth && iconBitCount == iconPriority_YARA[j].iconBitCount)
+						{
+							best_icon_priority = j;
+							theBestIcon = icon;
+							break;
+						}
+					}
+				}
+
+				// Set the current icon as the best one
+				if(!theBestIcon && icons.size())
+				{
+					best_icon_priority = iconPriority_YARA.size();
+					theBestIcon = icon;
+				}
+			}
+		}
+	}
+
+	// Return whatever best icon we found
+	return theBestIcon;
+}
+
+/**
  * Get begin iterator
  * @return Begin iterator
  */
@@ -394,13 +501,7 @@ void ResourceTable::computeIconHashes()
 {
 	std::vector<std::uint8_t> iconHashBytes;
 
-	auto priorGroup = getPriorResourceIconGroup();
-	if(!priorGroup)
-	{
-		return;
-	}
-
-	auto priorIcon = priorGroup->getPriorIcon();
+	auto priorIcon = getIconForIconHash();
 	if(!priorIcon)
 	{
 		return;
@@ -411,9 +512,9 @@ void ResourceTable::computeIconHashes()
 		return;
 	}
 
-	iconHashCrc32 = retdec::crypto::getCrc32(iconHashBytes.data(), iconHashBytes.size());
-	iconHashMd5 = retdec::crypto::getMd5(iconHashBytes.data(), iconHashBytes.size());
-	iconHashSha256 = retdec::crypto::getSha256(iconHashBytes.data(), iconHashBytes.size());
+	iconHashCrc32 = getCrc32(iconHashBytes.data(), iconHashBytes.size());
+	iconHashMd5 = getMd5(iconHashBytes.data(), iconHashBytes.size());
+	iconHashSha256 = getSha256(iconHashBytes.data(), iconHashBytes.size());
 	iconPerceptualAvgHash = computePerceptualAvgHash(*priorIcon);
 }
 
@@ -782,6 +883,11 @@ void ResourceTable::linkResourceIconGroups()
 					continue;
 				}
 
+				// Multiple icon group may reference an icon. If that happens, do not rewrite
+				// icon dimensions. Doing so messes up with the icon hash, and we only care for the first icon anyway
+				if(icon->hasValidDimensions())
+					continue;
+
 				icon->setWidth(width);
 				icon->setHeight(height);
 				icon->setIconSize(iconSize);
@@ -891,8 +997,8 @@ void ResourceTable::dump(std::string &dumpTable) const
 
 		for(const auto &res : table)
 		{
-			auto sName = (res->hasEmptyName() && res->getNameId(aux)) ? numToStr(aux, std::dec) : res->getName();
-			auto sType = (res->hasEmptyType() && res->getTypeId(aux)) ? numToStr(aux, std::dec) : res->getType();
+			auto sName = (res->hasEmptyName() && res->getNameId(aux)) ? std::to_string(aux) : res->getName();
+			auto sType = (res->hasEmptyType() && res->getTypeId(aux)) ? std::to_string(aux) : res->getType();
 			auto sLang = res->getLanguage();
 			if(sType.empty())
 			{
@@ -902,10 +1008,10 @@ void ResourceTable::dump(std::string &dumpTable) const
 			{
 				if(res->getLanguageId(aux))
 				{
-					sLang = numToStr(aux, std::dec);
+					sLang = std::to_string(aux);
 					if(res->getSublanguageId(aux))
 					{
-						sLang += ":" + numToStr(aux, std::dec);
+						sLang += ":" + std::to_string(aux);
 					}
 				}
 				else
@@ -915,8 +1021,8 @@ void ResourceTable::dump(std::string &dumpTable) const
 			}
 			const auto md5 = res->hasMd5() ? res->getMd5() : "-";
 			ret << "; " << sName << " (type: " << sType << ", language: " << sLang << ", offset: " <<
-				numToStr(res->getOffset(), std::hex) << ", declSize: " << numToStr(res->getSizeInFile(), std::hex) <<
-				", loadedSize: " << numToStr(res->getLoadedSize(), std::hex) << ", md5: " << md5 << ")\n";
+				intToHexString(res->getOffset()) << ", declSize: " << intToHexString(res->getSizeInFile()) <<
+				", loadedSize: " << intToHexString(res->getLoadedSize()) << ", md5: " << md5 << ")\n";
 		}
 	}
 

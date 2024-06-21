@@ -13,6 +13,7 @@
 
 #include "retdec/common/basic_block.h"
 #include "retdec/common/function.h"
+#include "retdec/config/config.h"
 
 namespace retdec {
 
@@ -37,7 +38,18 @@ struct LlvmModuleContextPair
  */
 LlvmModuleContextPair disassemble(
 		const std::string& inputPath,
-		retdec::common::FunctionSet* fs = nullptr);
+		retdec::common::FunctionSet* fs = nullptr
+);
+
+/**
+ * Run a decompilation according to a \p config configuration.
+ * If \p outString is set, decompilation output will be returned
+ * in this string. Otherwise, output file is expected to be set in \p config.
+ */
+bool decompile(
+		retdec::config::Config& config,
+		std::string* outString = nullptr
+);
 
 } // namespace retdec
 

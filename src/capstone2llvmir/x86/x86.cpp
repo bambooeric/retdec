@@ -5,7 +5,6 @@
  */
 
 #include <iomanip>
-#include <iostream>
 
 #include "capstone2llvmir/x86/x86_impl.h"
 
@@ -527,6 +526,12 @@ void Capstone2LlvmIrTranslatorX86_impl::generateRegistersCommon()
 	createRegister(X86_REG_ZMM30, _regLt);
 	createRegister(X86_REG_ZMM31, _regLt);
 
+	// BND
+	createRegister(X86_REG_BND0, _regLt);
+	createRegister(X86_REG_BND1, _regLt);
+	createRegister(X86_REG_BND2, _regLt);
+	createRegister(X86_REG_BND3, _regLt);
+
 	// Debug registers.
 	//
 	createRegister(X86_REG_DR0, _regLt);
@@ -960,7 +965,8 @@ llvm::Value* Capstone2LlvmIrTranslatorX86_impl::loadOp(
 	{
 		case X86_OP_REG:
 		{
-			return loadRegister(op.reg, irb);
+			auto* r = loadRegister(op.reg, irb);
+			return r ? r : llvm::UndefValue::get(ty ? ty : getDefaultType());
 		}
 		case X86_OP_IMM:
 		{
@@ -1195,6 +1201,7 @@ Capstone2LlvmIrTranslatorX86_impl::loadOpFloatingBinaryTop(
 	llvm::Value* op0 = nullptr;
 	llvm::Value* op1 = nullptr;
 	llvm::Value* idx = nullptr;
+	llvm::Value* idx2= nullptr;
 
 	if (xi->op_count == 0)
 	{
@@ -1215,7 +1222,7 @@ Capstone2LlvmIrTranslatorX86_impl::loadOpFloatingBinaryTop(
 
 		auto reg2 = xi->operands[1].reg;
 		unsigned regOff2 = reg2 - X86_REG_ST0;
-		auto* idx2 = regOff2
+		idx2 = regOff2
 				? irb.CreateAdd(top, llvm::ConstantInt::get(top->getType(), regOff2))
 				: top;
 
@@ -1282,7 +1289,7 @@ Capstone2LlvmIrTranslatorX86_impl::loadOpFloatingBinaryTop(
 	}
 
 	if (i->id == X86_INS_FSUBP
-			|| i->id == X86_INS_FADDP
+			|| i->id == X86_INS_FADD
 			|| i->id == X86_INS_FDIVP
 			|| i->id == X86_INS_FDIVRP
 			|| i->id == X86_INS_FMULP
@@ -1291,6 +1298,12 @@ Capstone2LlvmIrTranslatorX86_impl::loadOpFloatingBinaryTop(
 		auto* tmp = op0;
 		op0 = op1;
 		op1 = tmp;
+	}
+
+	if (i->id == X86_INS_FXCH
+			&& top == idx)
+	{
+		idx = idx2;
 	}
 
 	return std::make_tuple(op0, op1, top, idx);
@@ -2636,7 +2649,7 @@ void Capstone2LlvmIrTranslatorX86_impl::translateNeg(cs_insn* i, cs_x86* xi, llv
  * SMSW, CLTS, INVD, LOCK, RSM, RDMSR, WRMSR, RDPMC, SYSENTER,
  * SYSEXIT, XGETBV, LAR, LSL, INVPCID, SLDT, LLDT, SGDT, SIDT, LGDT, LIDT,
  * XSAVE, XRSTOR, XSAVEOPT, INVLPG, FLDENV, ARPL,
- * STR, FXTRACT,
+ * STR,
  * FWAIT, FNOP
  */
 void Capstone2LlvmIrTranslatorX86_impl::translateNop(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb)
@@ -4403,10 +4416,11 @@ void Capstone2LlvmIrTranslatorX86_impl::translateFadd(cs_insn* i, cs_x86* xi, ll
 	EXPECT_IS_EXPR(i, xi, irb, (xi->op_count <= 2));
 
 	std::tie(op0, op1, top, idx) = loadOpFloatingBinaryTop(i, xi, irb);
+	bool isFADDP = xi->opcode[0] == 0xDE && xi->opcode[1] == 0x00&& xi->opcode[2] == 0x00 && xi->opcode[3] == 0x00;
 
 	auto* fadd = irb.CreateFAdd(op0, op1);
 
-	if (xi->op_count == 2 || i->id == X86_INS_FADDP)
+	if (xi->op_count == 2 || isFADDP)
 	{
 		storeX87DataReg(irb, idx, fadd);
 	}
@@ -4415,7 +4429,7 @@ void Capstone2LlvmIrTranslatorX86_impl::translateFadd(cs_insn* i, cs_x86* xi, ll
 		storeX87DataReg(irb, top, fadd);
 	}
 
-	if (i->id == X86_INS_FADDP)
+	if (i->id == X86_INS_FADD)
 	{
 		x87IncTop(irb, top);
 	}
@@ -4774,13 +4788,11 @@ void Capstone2LlvmIrTranslatorX86_impl::translateFatan(cs_insn* i, cs_x86* xi, l
 
 	std::tie(op0, op1, top, idx) = loadOpFloatingBinaryTop(i, xi, irb);
 
-	auto div = irb.CreateFDiv(op1, op0);
-
 	llvm::Function* fnc = getPseudoAsmFunction(
 			i,
-			div->getType(),
-			llvm::ArrayRef<llvm::Type*>{div->getType()});
-	auto* atan = irb.CreateCall(fnc, llvm::ArrayRef<llvm::Value*>{div});
+			op0->getType(),
+			llvm::ArrayRef<llvm::Type*>{op1->getType(), op0->getType()});
+	auto* atan = irb.CreateCall(fnc, llvm::ArrayRef<llvm::Value*>{op1, op0});
 
 	storeX87DataReg(irb, idx, atan);
 
@@ -5071,16 +5083,16 @@ void Capstone2LlvmIrTranslatorX86_impl::translateFucomPop(cs_insn* i, cs_x86* xi
 
 	bool doublePop = i->id == X86_INS_FUCOMPP || i->id == X86_INS_FCOMPP;
 	bool pop = i->id == X86_INS_FUCOMP || i->id == X86_INS_FCOMP
-			|| i->id == X86_INS_FUCOMIP || i->id == X86_INS_FCOMIP
+			|| i->id == X86_INS_FUCOMPI || i->id == X86_INS_FCOMPI
 			|| i->id == X86_INS_FICOMP || doublePop;
 
 	uint32_t r1 = X87_REG_C0;
 	uint32_t r2 = X87_REG_C2;
 	uint32_t r3 = X87_REG_C3;
 	if (i->id == X86_INS_FUCOMI
-			|| i->id == X86_INS_FUCOMIP
+			|| i->id == X86_INS_FUCOMPI
 			|| i->id == X86_INS_FCOMI
-			|| i->id == X86_INS_FCOMIP)
+			|| i->id == X86_INS_FCOMPI)
 	{
 		r1 = X86_REG_CF;
 		r2 = X86_REG_PF;
@@ -5162,18 +5174,20 @@ void Capstone2LlvmIrTranslatorX86_impl::translateFxtract(cs_insn* i, cs_x86* xi,
 
 	// call of pseudo function witch parse mantissa and exponent from st(0) because llvm can not
 	// simply represent this operation by native
-	auto* pseudoGetSignificand = llvm::Function::Create(
-			llvm::FunctionType::get(op0->getType(), llvm::ArrayRef<llvm::Type*>{op0->getType()}, false),
-			llvm::GlobalValue::LinkageTypes::ExternalLinkage,
-			"__pseudo_get_significand",
-			_module);
+	llvm::Function* pseudoGetSignificand = getPseudoAsmFunction(
+			i,
+			op0->getType(),
+			llvm::ArrayRef<llvm::Type*>{op0->getType()},
+			"__pseudo_get_significand"
+	);
 	auto* mantissa = irb.CreateCall(pseudoGetSignificand, llvm::ArrayRef<llvm::Value*>{op0});
 
-	auto* pseudoGetExponent = llvm::Function::Create(
-		llvm::FunctionType::get(op0->getType(), llvm::ArrayRef<llvm::Type*>{op0->getType()}, false),
-		llvm::GlobalValue::LinkageTypes::ExternalLinkage,
-		"__pseudo_get_exponent",
-		_module);
+	llvm::Function* pseudoGetExponent = getPseudoAsmFunction(
+			i,
+			op0->getType(),
+			llvm::ArrayRef<llvm::Type*>{op0->getType()},
+			"__pseudo_get_exponent"
+	);
 	auto* exponent = irb.CreateCall(pseudoGetExponent, llvm::ArrayRef<llvm::Value*>{op0});
 
 	storeX87DataReg(irb, top, exponent);

@@ -5,7 +5,6 @@
 */
 
 #include <iomanip>
-#include <iostream>
 #include <queue>
 #include <set>
 #include <string>
@@ -51,7 +50,7 @@ std::string priority2string(eSourcePriority p)
 char SimpleTypesAnalysis::ID = 0;
 
 static RegisterPass<SimpleTypesAnalysis> X(
-		"simple-types",
+		"retdec-simple-types",
 		"Simple types recovery optimization",
 		 false, // Only looks at CFG
 		 false // Analysis Pass
@@ -87,6 +86,8 @@ bool SimpleTypesAnalysis::runOnModule(Module& M)
 
 	if (first)
 	{
+		first = false;
+
 		RDA.runOnModule(M, AbiProvider::getAbi(&M));
 		buildEqSets(M);
 		buildEquations();
@@ -94,11 +95,12 @@ bool SimpleTypesAnalysis::runOnModule(Module& M)
 		eqSets.apply(module, config, objf, instToErase);
 		eraseObsoleteInstructions();
 		setGlobalConstants();
-		first = false;
 		RDA.clear();
 	}
 	else
 	{
+		first = true;
+
 		instToErase.clear();
 
 		IrModifier irModif(module, config);
@@ -721,7 +723,7 @@ void SimpleTypesAnalysis::eraseObsoleteInstructions()
 
 EqSet& EqSetContainer::createEmptySet()
 {
-	eqSets.push_back( EqSet() );
+	eqSets.push_back(EqSet(eqSets.size()));
 	return eqSets.back();
 }
 
@@ -762,10 +764,8 @@ std::ostream& operator<<(std::ostream& out, const EqSetContainer& eqs)
 //=============================================================================
 //
 
-unsigned EqSet::newUID = 0;
-
-EqSet::EqSet() :
-		id(newUID++)
+EqSet::EqSet(std::size_t id) :
+		id(id)
 {
 
 }
@@ -1228,7 +1228,7 @@ void EqSet::apply(
 
 	LOG << "\napply BEGIN " << id << " =============================\n";
 
-	static auto &conf = config->getConfig();
+	auto &conf = config->getConfig();
 
 	IrModifier irModif(module, config);
 	for (auto& vs : valSet)

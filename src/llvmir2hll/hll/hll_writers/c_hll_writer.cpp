@@ -100,14 +100,10 @@
 #include "retdec/llvmir2hll/support/struct_types_sorter.h"
 #include "retdec/llvmir2hll/support/types.h"
 #include "retdec/llvmir2hll/utils/ir.h"
-#include "retdec/llvm-support/diagnostics.h"
 #include "retdec/utils/container.h"
 #include "retdec/utils/conversion.h"
 
-using namespace retdec::llvm_support;
-
 using retdec::utils::addToSet;
-using retdec::utils::toString;
 
 namespace retdec {
 namespace llvmir2hll {
@@ -509,8 +505,8 @@ void CHLLWriter::visit(ShPtr<GlobalVarDef> varDef) {
 	ShPtr<Variable> var(varDef->getVar());
 	ShPtr<Expression> init(varDef->getInitializer());
 
-	out->space(getCurrentIndent());
 	out->addressPush(varDef->getAddress());
+	out->space(getCurrentIndent());
 	emitVarWithType(var);
 
 	// Initializer.
@@ -568,7 +564,18 @@ bool CHLLWriter::emitTargetCode(ShPtr<Module> module) {
 
 void CHLLWriter::visit(ShPtr<Variable> var) {
 	if (var->getAddress().isDefined()) out->addressPush(var->getAddress());
-	out->variableId(var->getName());
+	if (module->isGlobalVar(var))
+	{
+		out->globalVariableId(var->getName());
+	}
+	else if (module->correspondsToFunc(var))
+	{
+		out->functionId(var->getName());
+	}
+	else
+	{
+		out->localVariableId(var->getName());
+	}
 	if (var->getAddress().isDefined()) out->addressPop();
 }
 
@@ -1963,7 +1970,7 @@ void CHLLWriter::emitStructDeclaration(ShPtr<StructType> structType,
 		ShPtr<Type> elemType(elements.at(i));
 		// Create a dummy variable so we can use emitVarWithType().
 		// All elements are named e#, where # is a number.
-		emitVarWithType(Variable::create("e" + toString(i), elemType));
+		emitVarWithType(Variable::create("e" + std::to_string(i), elemType));
 		out->punctuation(';');
 		if (!emitInline) {
 			out->newLine();
@@ -2095,7 +2102,7 @@ std::string CHLLWriter::genNameForUnnamedStruct(const StructTypeVector &usedStru
 	std::string structName;
 	// Create new names until we find a name without a clash.
 	do {
-		structName = "struct" + toString(++unnamedStructCounter);
+		structName = "struct" + std::to_string(++unnamedStructCounter);
 		for (const auto &type : usedStructTypes) {
 			if (cast<StructType>(type)->getName() == structName) {
 				// We have found a clash, so try a different name.

@@ -5,10 +5,11 @@
  */
 
 #include <fstream>
-#include <iostream>
 #include <ostream>
 
-#include "retdec/utils/filesystem_path.h"
+#include "retdec/utils/filesystem.h"
+#include "retdec/utils/io/log.h"
+#include "retdec/utils/version.h"
 #include "pat2yara/processing.h"
 #include "yaramod/builder/yara_file_builder.h"
 #include "yaramod/builder/yara_rule_builder.h"
@@ -18,18 +19,17 @@
  * Application for further processing of raw yara rules from bin2pat.
  */
 
-using namespace retdec::utils;
+using namespace retdec::utils::io;
 using namespace yaramod;
 
 /**
  * Print application usage.
  *
- * @param outputStream stream to write usage to
+ * @param log logger object to write usage with
  */
-void printUsage(
-	std::ostream &outputStream)
+void printUsage(Logger& log)
 {
-	outputStream <<
+	log <<
 	"Usage: pat2yara [-o OUTPUT_FILE] [--max-size VALUE] [--min-size VALUE]\n"
 	"  [--min-pure VALUE] [-o OUTPUT_FILE] INPUT_FILE [INPUT_FILE...]\n\n"
 	"-o --output OUTPUT_FILE\n"
@@ -48,7 +48,11 @@ void printUsage(
 	"--ignore-nops OPCODE\n"
 	"    Ignore NOPs with OPCODE when computing (pure) size.\n\n"
 	"--delphi\n"
-	"    Set special Delphi processing on.\n\n";
+	"    Set special Delphi processing on.\n"
+	"-h --help\n"
+	"    Show this help.\n"
+	"--version\n"
+	"    Show RetDec version.\n";
 }
 
 /**
@@ -61,7 +65,7 @@ void printUsage(
 int dieWithError(
 	const std::string &message)
 {
-	std::cerr << "Error: " << message << "\n";
+	Log::error() << Log::Error << message << "\n";
 	return 1;
 }
 
@@ -73,7 +77,7 @@ int dieWithError(
 void printWarning(
 	const std::string &message)
 {
-	std::cerr << "Warning: " << message << "\n";
+	Log::error() << Log::Warning << message << "\n";
 }
 
 /**
@@ -114,7 +118,12 @@ int processArguments(std::vector<std::string> &args)
 
 	for (std::size_t i = 0; i < args.size(); ++i) {
 		if (args[i] == "--help" || args[i] == "-h") {
-			printUsage(std::cout);
+			printUsage(Log::get(Log::Type::Info));
+			return 0;
+		}
+		else if (args[i] == "--version") {
+			Log::info() << retdec::utils::version::getVersionStringLong()
+					<< "\n";
 			return 0;
 		}
 		else if (args[i] == "--delphi") {
@@ -159,7 +168,7 @@ int processArguments(std::vector<std::string> &args)
 			}
 		}
 		else {
-			if (FilesystemPath(args[i]).isFile()) {
+			if (fs::is_regular_file(args[i])) {
 				options.input.push_back(args[i]);
 			}
 			else {
@@ -191,7 +200,7 @@ int processArguments(std::vector<std::string> &args)
 	}
 	else {
 		processFiles(fileBuilder, logBuilder, options);
-		std::cout << fileBuilder.get(false)->getText() << std::endl;
+		Log::info() << fileBuilder.get(false)->getText() << std::endl;
 	}
 
 	// Write log-file.

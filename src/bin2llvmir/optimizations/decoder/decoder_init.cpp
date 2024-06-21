@@ -21,7 +21,6 @@ namespace bin2llvmir {
 /**
  * Initialize capstone2llvmir translator according to the architecture of
  * file to decompile.
- * @return @c True if error, @c false otherwise.
  */
 void Decoder::initTranslator()
 {
@@ -327,7 +326,7 @@ void Decoder::initAllowedRangesWithSegments()
 		auto& rc = seg->getNonDecodableAddressRanges();
 		for (auto& r : rc)
 		{
-			if (!r.contains(_config->getConfig().getEntryPoint()))
+			if (!r.contains(_config->getConfig().parameters.getEntryPoint()))
 			{
 				_ranges.remove(r.getStart(), r.getEnd());
 			}
@@ -544,8 +543,7 @@ void Decoder::initAllowedRangesWithConfig()
 void Decoder::initJumpTargets()
 {
 	initJumpTargetsConfig();
-	if (!(_config->getConfig().isIda()
-			&& _config->getConfig().parameters.isSomethingSelected()))
+	if (_config->getConfig().parameters.isDetectStaticCode())
 	{
 		initStaticCode();
 	}
@@ -598,7 +596,7 @@ void Decoder::initJumpTargetsEntryPoint()
 {
 	LOG << "\n" << "initJumpTargetsEntryPoint():" << std::endl;
 
-	auto ep = _config->getConfig().getEntryPoint();
+	auto ep = _config->getConfig().parameters.getEntryPoint();
 	if (auto* jt = _jumpTargets.push(
 			ep,
 			JumpTarget::eType::ENTRY_POINT,

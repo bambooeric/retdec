@@ -4,8 +4,6 @@
  * @copyright (c) 2017 Avast Software, licensed under the MIT license
  */
 
-#include <iostream>
-
 #include "retdec/utils/conversion.h"
 #include "retdec/utils/string.h"
 #include "retdec/fileformat/types/dotnet_headers/metadata_tables.h"
@@ -37,6 +35,9 @@ std::uint64_t decodeUnsigned(const std::vector<std::uint8_t>& data, std::uint64_
 {
 	std::uint64_t result = 0;
 	bytesRead = 0;
+
+	if (data.empty())
+		return result;
 
 	// If highest bit not set, it is 1-byte number
 	if ((data[0] & 0x80) == 0)
@@ -83,6 +84,9 @@ std::int64_t decodeSigned(const std::vector<std::uint8_t>& data, std::uint64_t& 
 {
 	std::int64_t result = 0;
 	bytesRead = 0;
+
+	if (data.empty())
+		return result;
 
 	// If highest bit not set, it is 1-byte number
 	if ((data[0] & 0x80) == 0)
@@ -178,6 +182,12 @@ DotnetTypeVisibility toTypeVisibility(const T* source)
 		return DotnetTypeVisibility::Protected;
 	else if (source->isPrivate())
 		return DotnetTypeVisibility::Private;
+	else if (source->isInternal())
+		return DotnetTypeVisibility::Internal;
+	else if (source->isFamOrAssem())
+		return DotnetTypeVisibility::ProtectedInternal;
+	else if (source->isFamAndAssem())
+		return DotnetTypeVisibility::PrivateProtected;
 	else
 		return DotnetTypeVisibility::Private;
 }
@@ -185,16 +195,21 @@ DotnetTypeVisibility toTypeVisibility(const T* source)
 template <>
 DotnetTypeVisibility toTypeVisibility<TypeDef>(const TypeDef* source)
 {
-	if (source->isPublic() || source->isNestedPublic())
-		return DotnetTypeVisibility::Public;
+	if (source->isNonPublic() || source->isNestedInternal())
+		return DotnetTypeVisibility::Internal;
 	else if (source->isNestedProtected())
 		return DotnetTypeVisibility::Protected;
-	else if (source->isNonPublic() || source->isNestedPrivate())
+	else if (source->isNestedPrivate())
 		return DotnetTypeVisibility::Private;
+	else if (source->isNestedFamAndAssem())
+		return DotnetTypeVisibility::PrivateProtected;
+	else if (source->isNestedFamOrAssem())
+		return DotnetTypeVisibility::ProtectedInternal;
+	else if (source->isNestedPublic() || source->isPublic())
+		return DotnetTypeVisibility::Public;
 	else
 		return DotnetTypeVisibility::Private;
 }
-
 }
 
 /**
@@ -498,10 +513,6 @@ bool DotnetTypeReconstructor::reconstructGenericParameters()
  */
 bool DotnetTypeReconstructor::reconstructMethodParameters()
 {
-	auto paramTable = static_cast<const MetadataTable<Param>*>(metadataStream->getMetadataTable(MetadataTableType::Param));
-	if (paramTable == nullptr)
-		return true;
-
 	// We need to iterate over classes because we need to know the owner of every single method
 	for (const auto& kv : defClassTable)
 	{
@@ -513,7 +524,7 @@ bool DotnetTypeReconstructor::reconstructMethodParameters()
 			// Obtain postponed signature
 			// We now know all the information required for method parameters reconstruction
 			auto methodDef = method->getRawRecord();
-			auto signature = methodReturnTypeAndParamTypeTable[method.get()];
+			auto& signature = methodReturnTypeAndParamTypeTable[method.get()];
 
 			// Reconstruct return type
 			auto returnType = dataTypeFromSignature(signature, classType.get(), method.get());
@@ -526,11 +537,7 @@ bool DotnetTypeReconstructor::reconstructMethodParameters()
 			auto startIndex = methodDef->paramList.getIndex();
 			for (auto i = startIndex; i < startIndex + method->getDeclaredParametersCount(); ++i)
 			{
-				auto param = paramTable->getRow(i);
-				if (param == nullptr)
-					break;
-
-				auto newParam = createMethodParameter(param, classType.get(), method.get(), signature);
+				auto newParam = createMethodParameter(i, startIndex, classType.get(), method.get(), signature);
 				if (newParam == nullptr)
 				{
 					methodOk = false;
@@ -651,14 +658,27 @@ bool DotnetTypeReconstructor::reconstructNestedClasses()
 		auto nestedClass = nestedClassTable->getRow(i);
 
 		auto nestedItr = defClassTable.find(nestedClass->nestedClass.getIndex());
-		if (nestedItr == defClassTable.end())
+		// Validate that the type is actually nested
+		if (nestedItr == defClassTable.end() || !nestedItr->second->isNested())
 			continue;
 
 		auto enclosingItr = defClassTable.find(nestedClass->enclosingClass.getIndex());
 		if (enclosingItr == defClassTable.end())
 			continue;
 
-		nestedItr->second->setNameSpace(enclosingItr->second->getFullyQualifiedName());
+		// Ignore self-references
+		if (nestedItr == enclosingItr)
+			continue;
+
+		const std::string& namespac = nestedItr->second->getNameSpace();
+		if (namespac.empty())
+		{
+			nestedItr->second->setNameSpace(enclosingItr->second->getFullyQualifiedName());
+		}
+		else
+		{
+			nestedItr->second->setNameSpace(enclosingItr->second->getFullyQualifiedName() + "." + nestedItr->second->getNameSpace());
+		}
 	}
 
 	return true;
@@ -1006,20 +1026,38 @@ std::unique_ptr<DotnetMethod> DotnetTypeReconstructor::createMethod(const Method
 
 /**
  * Creates new method parameter from Param table record.
- * @param param Param table record.
+ * @param paramIdx Index of the current Param record
+ * @param startIdx Index of the first Param record of the method
  * @param ownerClass Owning class.
  * @param ownerMethod Owning method.
  * @param signature Signature with data types. Is destroyed in the meantime.
  * @return New method parameter or @c nullptr in case of failure.
  */
-std::unique_ptr<DotnetParameter> DotnetTypeReconstructor::createMethodParameter(const Param* param, const DotnetClass* ownerClass,
+std::unique_ptr<DotnetParameter> DotnetTypeReconstructor::createMethodParameter(
+		std::size_t paramIdx, std::size_t startIdx, const DotnetClass* ownerClass,
 		const DotnetMethod* ownerMethod, std::vector<std::uint8_t>& signature)
 {
 	std::string paramName;
-	if (!stringStream->getString(param->name.getIndex(), paramName))
-		return nullptr;
 
-	paramName = retdec::utils::replaceNonprintableChars(paramName);
+	auto paramTable = static_cast<const MetadataTable<Param>*>(metadataStream->getMetadataTable(MetadataTableType::Param));
+	const Param* param;
+
+	if (paramTable && (param = paramTable->getRow(paramIdx)))
+	{
+		if (!stringStream->getString(param->name.getIndex(), paramName)) {
+			paramName = retdec::utils::replaceNonprintableChars(paramName);
+		}
+		// else leave it empty with just a type
+	}
+	// If there is no paramTable, we can still reconstruct everything
+	// from the signature, except name -> default name
+	else
+	{
+		std::stringstream fmt;
+		fmt << "P_" << paramIdx - startIdx;
+		paramName = fmt.str();
+	}
+
 	auto type = dataTypeFromSignature(signature, ownerClass, ownerMethod);
 	if (type == nullptr)
 		return nullptr;
@@ -1164,7 +1202,7 @@ std::unique_ptr<DotnetDataTypeArray> DotnetTypeReconstructor::createArray(std::v
 	// Some dimensions can have limited size by declaration
 	// Size 0 means not specified
 	std::uint64_t numOfSizes = decodeUnsigned(data, bytesRead);
-	if (bytesRead == 0)
+	if (bytesRead == 0 || numOfSizes > rank)
 		return nullptr;
 	data.erase(data.begin(), data.begin() + bytesRead);
 
@@ -1179,7 +1217,7 @@ std::unique_ptr<DotnetDataTypeArray> DotnetTypeReconstructor::createArray(std::v
 
 	// And some dimensions can also be limited by special lower bound
 	std::size_t numOfLowBounds = decodeUnsigned(data, bytesRead);
-	if (bytesRead == 0)
+	if (bytesRead == 0 || numOfLowBounds > rank)
 		return nullptr;
 	data.erase(data.begin(), data.begin() + bytesRead);
 
@@ -1432,6 +1470,7 @@ const DotnetClass* DotnetTypeReconstructor::selectClass(const TypeDefOrRef& type
 
 		result = itr->second.get();
 	}
+	// TODO TypeSpec is missing here
 
 	return result;
 }

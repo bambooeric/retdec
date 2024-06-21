@@ -1,10 +1,23 @@
 
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.13)
 
 project(retdec
 	LANGUAGES C CXX
-	VERSION 4.0
+	VERSION 5.0
 )
+
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/GetGitRevisionDescription.cmake)
+get_git_head_revision(
+	RETDEC_GIT_REFSPEC
+	RETDEC_GIT_COMMIT_HASH
+)
+git_describe(
+	RETDEC_GIT_VERSION_TAG
+	"--tags"
+)
+string(TIMESTAMP RETDEC_BUILD_DATE UTC)
+
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -24,7 +37,8 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/utils.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/options.cmake)
 
 # RetDec, and some dependencies (e.g. LLVM, Keystone), require Python 3.
-find_package(PythonInterp 3.4 REQUIRED)
+find_package(Python3 3.4 REQUIRED)
+set(PYTHON_EXECUTABLE ${Python3_EXECUTABLE})
 
 ### Variables.
 
@@ -101,11 +115,14 @@ if(MSVC)
 	add_definitions(-D_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING)
 
 	if(RETDEC_MSVC_STATIC_RUNTIME)
+		string(REPLACE "/MD" "/MT" CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
+		string(REPLACE "/MD" "/MT" CMAKE_C_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE})
+
 		string(REPLACE "/MD" "/MT" CMAKE_CXX_FLAGS_RELWITHDEBINFO ${CMAKE_CXX_FLAGS_RELWITHDEBINFO})
 		string(REPLACE "/MD" "/MT" CMAKE_C_FLAGS_RELWITHDEBINFO ${CMAKE_C_FLAGS_RELWITHDEBINFO})
 
-		string(REPLACE "/MD" "/MT" CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
-		string(REPLACE "/MD" "/MT" CMAKE_C_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE})
+		string(REPLACE "/MD" "/MT" CMAKE_CXX_FLAGS_MINSIZEREL ${CMAKE_CXX_FLAGS_MINSIZEREL})
+		string(REPLACE "/MD" "/MT" CMAKE_C_FLAGS_MINSIZEREL ${CMAKE_C_FLAGS_MINSIZEREL})
 
 		string(REPLACE "/MDd" "/MT" CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG})
 		string(REPLACE "/MDd" "/MT" CMAKE_C_FLAGS_DEBUG ${CMAKE_C_FLAGS_DEBUG})
@@ -113,6 +130,9 @@ if(MSVC)
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MT")
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MT")
 		set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
+		set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /MT")
+		set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} /MT")
+		set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MT")
 	endif()
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
 		CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR
@@ -139,9 +159,9 @@ endif()
 
 add_subdirectory(deps)
 cond_add_subdirectory(doc RETDEC_DOC)
-cond_add_subdirectory(scripts RETDEC_ENABLE_SCRIPTS)
+add_subdirectory(scripts)
 add_subdirectory(src)
-cond_add_subdirectory(support RETDEC_ENABLE_SUPPORT)
+add_subdirectory(support)
 add_subdirectory(tests)
 
 # Create config version file.
@@ -180,12 +200,9 @@ install(
 )
 
 # Install commit id file.
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/GetGitRevisionDescription.cmake)
-get_git_head_revision(GIT_REFSPEC GIT_COMMIT)
-string(TIMESTAMP DATE UTC)
 file(WRITE
 	"${CMAKE_CURRENT_BINARY_DIR}/BUILD-ID"
-	"This build was generated from commit ${GIT_COMMIT} on ${DATE} (UTC)."
+	"RetDec ${RETDEC_GIT_VERSION_TAG} built from commit ${RETDEC_GIT_COMMIT_HASH} on ${RETDEC_BUILD_DATE} (UTC).\n"
 )
 install(
 	FILES

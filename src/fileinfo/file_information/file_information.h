@@ -26,6 +26,8 @@ class FileInformation
 	private:
 		retdec::cpdetect::ReturnCode status = retdec::cpdetect::ReturnCode::OK;
 		std::string filePath;                          ///< path to input file
+		std::string analysisTime;                      ///< time when the analysis was done
+		std::string telfhash;                          ///< telfhash of ELF input file
 		std::string crc32;                             ///< CRC32 of input file
 		std::string md5;                               ///< MD5 of input file
 		std::string sha256;                            ///< SHA256 of input file
@@ -48,7 +50,6 @@ class FileInformation
 		ImportTable importTable;                       ///< information about imports
 		ExportTable exportTable;                       ///< information about exports
 		ResourceTable resourceTable;                   ///< information about resources in input file
-		CertificateTable certificateTable;             ///< information about certificates
 		TlsInfo tlsInfo;                               ///< information about thread-local storage
 		ElfCore elfCoreInfo;                           ///< information about ELF core files
 		LoaderInfo loaderInfo;                         ///< information about loaded image
@@ -69,6 +70,8 @@ class FileInformation
 		std::vector<std::pair<std::string,std::string>> anomalies;     ///< detected anomalies
 
 	public:
+		const retdec::fileformat::CertificateTable* certificateTable = nullptr; ///< information about signatures
+		retdec::fileformat::PeTimestamps pe_timestamps; ///< Various Timestamps stored in PE file
 		retdec::cpdetect::ToolInformation toolInfo; ///< detected tools
 		std::vector<std::string> messages;   ///< error, warning and other messages
 
@@ -76,6 +79,8 @@ class FileInformation
 		/// @{
 		retdec::cpdetect::ReturnCode getStatus() const;
 		std::string getPathToFile() const;
+		std::string getAnalysisTime() const;
+		std::string getTelfhash() const;
 		std::string getCrc32() const;
 		std::string getMd5() const;
 		std::string getSha256() const;
@@ -157,6 +162,9 @@ class FileInformation
 		std::string getRichHeaderRecordProductNameStr(std::size_t position) const;
 		std::string getRichHeaderRecordVisualStudioNameStr(std::size_t position) const;
 		std::string getRichHeaderRawBytesStr() const;
+		std::string getRichHeaderSha256() const;
+		std::string getRichHeaderCrc32() const;
+		std::string getRichHeaderMd5() const;
 		bool hasRichHeaderRecords() const;
 		/// @}
 
@@ -216,6 +224,7 @@ class FileInformation
 		std::string getImphashCrc32() const;
 		std::string getImphashMd5() const;
 		std::string getImphashSha256() const;
+		std::string getImphashTlsh() const;
 		const retdec::fileformat::Import* getImport(std::size_t position) const;
 		std::string getImportName(std::size_t position) const;
 		std::string getImportLibraryName(std::size_t position) const;
@@ -236,6 +245,7 @@ class FileInformation
 		/// @name Getters of @a exportTable
 		/// @{
 		std::size_t getNumberOfStoredExports() const;
+		std::string getExportDllName() const;
 		std::string getExphashCrc32() const;
 		std::string getExphashMd5() const;
 		std::string getExphashSha256() const;
@@ -271,56 +281,6 @@ class FileInformation
 		std::string getResourceOffsetStr(std::size_t index, std::ios_base &(* format)(std::ios_base &)) const;
 		std::string getResourceSizeStr(std::size_t index, std::ios_base &(* format)(std::ios_base &)) const;
 		bool hasResourceTableRecords() const;
-		/// @}
-
-		/// @name Getters of @a certificateTable
-		/// @{
-		std::size_t getNumberOfStoredCertificates() const;
-		std::size_t getCertificateTableSignerCertificateIndex() const;
-		std::size_t getCertificateTableCounterSignerCertificateIndex() const;
-		std::string getCertificateValidSince(std::size_t index) const;
-		std::string getCertificateValidUntil(std::size_t index) const;
-		std::string getCertificatePublicKey(std::size_t index) const;
-		std::string getCertificatePublicKeyAlgorithm(std::size_t index) const;
-		std::string getCertificateSignatureAlgorithm(std::size_t index) const;
-		std::string getCertificateSerialNumber(std::size_t index) const;
-		std::string getCertificateSha1Digest(std::size_t index) const;
-		std::string getCertificateSha256Digest(std::size_t index) const;
-		std::string getCertificateIssuerRawStr(std::size_t index) const;
-		std::string getCertificateSubjectRawStr(std::size_t index) const;
-		std::string getCertificateIssuerCountry(std::size_t index) const;
-		std::string getCertificateIssuerOrganization(std::size_t index) const;
-		std::string getCertificateIssuerOrganizationalUnit(std::size_t index) const;
-		std::string getCertificateIssuerNameQualifier(std::size_t index) const;
-		std::string getCertificateIssuerState(std::size_t index) const;
-		std::string getCertificateIssuerCommonName(std::size_t index) const;
-		std::string getCertificateIssuerSerialNumber(std::size_t index) const;
-		std::string getCertificateIssuerLocality(std::size_t index) const;
-		std::string getCertificateIssuerTitle(std::size_t index) const;
-		std::string getCertificateIssuerSurname(std::size_t index) const;
-		std::string getCertificateIssuerGivenName(std::size_t index) const;
-		std::string getCertificateIssuerInitials(std::size_t index) const;
-		std::string getCertificateIssuerPseudonym(std::size_t index) const;
-		std::string getCertificateIssuerGenerationQualifier(std::size_t index) const;
-		std::string getCertificateIssuerEmailAddress(std::size_t index) const;
-		std::string getCertificateSubjectCountry(std::size_t index) const;
-		std::string getCertificateSubjectOrganization(std::size_t index) const;
-		std::string getCertificateSubjectOrganizationalUnit(std::size_t index) const;
-		std::string getCertificateSubjectNameQualifier(std::size_t index) const;
-		std::string getCertificateSubjectState(std::size_t index) const;
-		std::string getCertificateSubjectCommonName(std::size_t index) const;
-		std::string getCertificateSubjectSerialNumber(std::size_t index) const;
-		std::string getCertificateSubjectLocality(std::size_t index) const;
-		std::string getCertificateSubjectTitle(std::size_t index) const;
-		std::string getCertificateSubjectSurname(std::size_t index) const;
-		std::string getCertificateSubjectGivenName(std::size_t index) const;
-		std::string getCertificateSubjectInitials(std::size_t index) const;
-		std::string getCertificateSubjectPseudonym(std::size_t index) const;
-		std::string getCertificateSubjectGenerationQualifier(std::size_t index) const;
-		std::string getCertificateSubjectEmailAddress(std::size_t index) const;
-		bool hasCertificateTableRecords() const;
-		bool hasCertificateTableSignerCertificate() const;
-		bool hasCertificateTableCounterSignerCertificate() const;
 		/// @}
 
 		/// @name Getters of @a TLS information
@@ -546,6 +506,8 @@ class FileInformation
 		/// @{
 		void setStatus(retdec::cpdetect::ReturnCode state);
 		void setPathToFile(const std::string &filepath);
+		void setAnalysisTime(const std::string &analysistime);
+		void setTelfhash(const std::string &telfhash);
 		void setCrc32(const std::string &fileCrc32);
 		void setMd5(const std::string &fileMd5);
 		void setSha256(const std::string &fileSha256);

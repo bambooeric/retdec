@@ -89,7 +89,10 @@ Name::Name(Config* c, const std::string& name, eType type, Lti* lti) :
 
 	fixPostfix();
 
-	_inLti = lti->getLtiFunction(_name) != nullptr;
+	if (lti && _type > eType::LTI_FUNCTION && lti->getLtiFunction(_name))
+	{
+		_type = eType::LTI_FUNCTION;
+	}
 }
 
 Name::operator std::string() const
@@ -106,33 +109,17 @@ bool Name::operator<(const Name& o) const
 {
 	if (_type == o._type)
 	{
-		// Can this even happen? Maybe it should not.
-		//
-		if (_name.empty())
-		{
-			return false;
-		}
-		else if (o._name.empty())
-		{
-			return true;
-		}
-		else if (_inLti)
-		{
-			return true;
-		}
-		else if (o._inLti)
-		{
-			return false;
-		}
 		// E.g. real case symbol table:
 		// 0x407748 @ .text
 		// 0x407748 @ _printf
 		//
-		else if (_name.front() == '.')
+		if (!_name.empty() && _name.front() == '.'
+				&& !o._name.empty() && o._name.front() != '.')
 		{
 			return false;
 		}
-		else if (o._name.front() == '.')
+		else if (!_name.empty() && _name.front() != '.'
+				&& !o._name.empty() && o._name.front() == '.')
 		{
 			return true;
 		}
@@ -324,7 +311,7 @@ const Name& NameContainer::getPreferredNameForAddress(retdec::common::Address a)
 void NameContainer::initFromConfig()
 {
 	addNameForAddress(
-			_config->getConfig().getEntryPoint(),
+			_config->getConfig().parameters.getEntryPoint(),
 			names::entryPointName,
 			Name::eType::ENTRY_POINT);
 
@@ -380,7 +367,7 @@ void NameContainer::initFromImage()
 	{
 		Address addr = imp->getAddress();
 		std::string name = imp->getName();
-		unsigned long long ord = 0;
+		std::uint64_t ord = 0;
 		bool ordOk = false;
 
 		if (name.empty())
@@ -414,24 +401,24 @@ void NameContainer::initFromImage()
 		}
 	}
 
-	if (auto *exTbl = _image->getFileFormat()->getExportTable())
-	for (const auto &exp : *exTbl)
-	{
-		addNameForAddress(
-				exp.getAddress(),
-				exp.getName(),
-				Name::eType::EXPORT);
-	}
+	if (auto* exTbl = _image->getFileFormat()->getExportTable())
+		for (const auto& exp : *exTbl)
+		{
+			addNameForAddress(
+					exp.getAddress(),
+					exp.getName(),
+					Name::eType::EXPORT);
+		}
 
 	for (const auto* t : _image->getFileFormat()->getSymbolTables())
-	for (const auto& s : *t)
-	{
-		unsigned long long a = 0;
-		if (s->getRealAddress(a))
+		for (const auto& s : *t)
 		{
-			Name::eType t = Name::eType::SYMBOL_OTHER;
-			switch (s->getUsageType())
+			unsigned long long a = 0;
+			if (s->getRealAddress(a))
 			{
+				Name::eType t = Name::eType::SYMBOL_OTHER;
+				switch (s->getUsageType())
+				{
 				case retdec::fileformat::Symbol::UsageType::FUNCTION:
 					t = Name::eType::SYMBOL_FUNCTION;
 					break;
@@ -444,20 +431,20 @@ void NameContainer::initFromImage()
 				default:
 					t = Name::eType::SYMBOL_OTHER;
 					break;
-			}
+				}
 
-			if (_config->getConfig().architecture.isArm32OrThumb() && a % 2)
-			{
-				a -= 1;
-			}
+				if (_config->getConfig().architecture.isArm32OrThumb() && a % 2)
+				{
+					a -= 1;
+				}
 
-			addNameForAddress(a, s->getName(), t);
+				addNameForAddress(a, s->getName(), t);
+			}
 		}
-	}
 
 	if (_image->getFileFormat())
 	{
-		unsigned long long ep = 0;
+		std::uint64_t ep = 0;
 		if (_image->getFileFormat()->getEpAddress(ep))
 		{
 			if (_config->getConfig().architecture.isArm32OrThumb() && ep % 2)
@@ -516,8 +503,13 @@ std::string NameContainer::getNameFromImportLibAndOrd(
 
 bool NameContainer::loadImportOrds(const std::string& libName)
 {
+	std::string arch;
+	if (_config->getConfig().architecture.isArm()) arch = "arm";
+	else if (_config->getConfig().architecture.isX86()) arch = "x86";
+	else return false;
+
 	auto dir = _config->getConfig().parameters.getOrdinalNumbersDirectory();
-	auto filePath = dir + "/" + libName + ".ord";
+	auto filePath = dir + "/" + arch + "/" + libName + ".ord";
 
 	std::ifstream inputFile;
 	inputFile.open(filePath);
